@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TitaniumCrab</RootNamespace>
+    <AssemblyName>TitaniumCrab</AssemblyName>
+    <Product>TitaniumCrab</Product>
+    <Version>0.2.0</Version>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!--
+    Point this at your BepInEx IL2CPP install for Crab Game.
+    Default is the standard Steam install path. Override from the command line:
+      dotnet build -p:BepInExProfileDir="C:/path/to/BepInEx"
+  -->
+  <PropertyGroup>
+    <BepInExProfileDir Condition="'$(BepInExProfileDir)' == ''">C:/Steam/steamapps/common/Crab Game/BepInEx</BepInExProfileDir>
+    <UnhollowedDir>$(BepInExProfileDir)/interop</UnhollowedDir>
+    <CoreDir>$(BepInExProfileDir)/core</CoreDir>
+  </PropertyGroup>
+
+  <!-- Fail fast if the unhollowed assemblies are missing -->
+  <Target Name="CheckUnhollowed" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(UnhollowedDir)/Assembly-CSharp.dll')"
+           Text="Unhollowed assemblies not found at $(UnhollowedDir). Set BepInExProfileDir to your BepInEx directory." />
+  </Target>
+
+  <!-- Don't copy referenced DLLs next to the build output -->
+  <Target Name="ClearReferenceCopyLocalPaths" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" />
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.682">
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Il2CppInterop.Common" Version="1.4.6-ci.394">
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Il2CppInterop.Runtime" Version="1.4.6-ci.394">
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <!-- Publicizer lets us access private game fields/methods at compile time -->
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" PrivateAssets="all" Version="0.4.1">
+      <NoWarn>$(NoWarn);CS0436</NoWarn>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- BepInEx core assemblies -->
+    <Reference Include="0Harmony" Publicize="true">
+      <HintPath>$(CoreDir)/0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- Game assemblies (unhollowed by Il2CppInterop) -->
+    <Reference Include="Assembly-CSharp" Publicize="true">
+      <HintPath>$(UnhollowedDir)/Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(UnhollowedDir)/Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- Il2Cpp runtime assemblies -->
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(UnhollowedDir)/Il2Cppmscorlib.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(UnhollowedDir)/Il2CppSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem.Core">
+      <HintPath>$(UnhollowedDir)/Il2CppSystem.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+
+    <!-- Unity assemblies -->
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.AnimationModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(UnhollowedDir)/UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(UnhollowedDir)/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(UnhollowedDir)/Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

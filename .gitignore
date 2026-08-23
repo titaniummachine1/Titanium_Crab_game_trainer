@@ -1,0 +1,17 @@
+# Build output
+[Tt]itaniumCrab/bin/
+[Tt]itaniumCrab/obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# BepInEx profile (local install — don't commit)
+BepInEx/
