@@ -160,66 +160,8 @@ namespace TitaniumCrab
             if (p.AirJumpEnabled)
                 param_3 = param_3 || PlayerInput.CheckInputDown(InputManager.jump);
 
-            // --- Auto-Strafe (velocity vector steering) ---
-            // Like Minecraft's "accurate walk": smoothly rotates the player's
-            // velocity vector to match the desired movement direction with high
-            // acceleration. This gives precise control when turning — no drift,
-            // no wobble. Works both grounded and airborne.
-            if (p.AutoStrafeEnabled)
-            {
-                PlayerMovement pm = TrainerMenu.GetLocalPlayerMovement();
-                if (pm == null)
-                    return;
-
-                Rigidbody rb = pm.GetRb();
-                if (rb == null)
-                    return;
-
-                Camera cam = Camera.main;
-                if (cam == null)
-                    return;
-
-                // Get desired movement direction from WASD input relative to camera
-                Vector3 forward = cam.transform.forward;
-                forward.y = 0f;
-                forward.Normalize();
-                Vector3 right = cam.transform.right;
-                right.y = 0f;
-                right.Normalize();
-
-                Vector3 desiredDir = Vector3.zero;
-                if (Input.GetKey(KeyCode.W)) desiredDir += forward;
-                if (Input.GetKey(KeyCode.S)) desiredDir -= forward;
-                if (Input.GetKey(KeyCode.A)) desiredDir -= right;
-                if (Input.GetKey(KeyCode.D)) desiredDir += right;
-
-                if (desiredDir.sqrMagnitude > 0.01f)
-                {
-                    desiredDir.Normalize();
-
-                    // Get current horizontal velocity
-                    Vector3 vel = rb.velocity;
-                    Vector3 horizontal = new(vel.x, 0f, vel.z);
-                    float currentSpeed = horizontal.magnitude;
-
-                    if (currentSpeed > 0.1f)
-                    {
-                        // Steer: rotate velocity vector toward desired direction
-                        // High lerp factor = fast response, but not instant (no snap)
-                        // 0.3 = ~3 frames to fully turn at 60fps, feels responsive
-                        float steerSpeed = 8f * Time.fixedDeltaTime;
-                        Vector3 currentDir = horizontal.normalized;
-                        Vector3 newDir = Vector3.Lerp(currentDir, desiredDir, steerSpeed);
-
-                        // Preserve speed but redirect it
-                        rb.velocity = new Vector3(
-                            newDir.x * currentSpeed,
-                            vel.y,
-                            newDir.z * currentSpeed
-                        );
-                    }
-                }
-            }
+            // Note: Auto-Strafe is handled in TrainerMenu.FixedUpdate
+            // so it runs AFTER the game applies its own movement forces.
         }
 
         // =====================================================================

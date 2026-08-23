@@ -70,7 +70,9 @@ namespace TitaniumCrab
 
         private void FixedUpdate()
         {
-            // Infinite Slap runs in FixedUpdate to sync with physics tick
+            // Auto-Strafe and Infinite Slap run in FixedUpdate so they
+            // execute AFTER the game applies its own movement/punch forces
+            RunAutoStrafe();
             RunAutoSlap();
         }
 
@@ -477,10 +479,83 @@ namespace TitaniumCrab
         }
 
         /// <summary>
-        /// Infinite Slap: force the punch component to be active and reset its
-        /// cooldown every physics tick, producing continuous slaps with no
-        /// cooldown. Based on CodeName-Anti's InfinityPunchModule.
-        /// Runs in FixedUpdate so it syncs with the game's physics tick.
+        /// Auto-Strafe (accurate walk): gives perfect control over movement.
+        /// - When holding WASD: smoothly rotates velocity vector toward desired
+        ///   direction with high acceleration (like Minecraft accurate walk)
+        /// - When no input: kills horizontal velocity immediately (no sliding)
+        /// - Preserves normal speed, just adds precise directional control
+        /// Runs in FixedUpdate so it overrides the game's velocity AFTER
+        /// the game applies its own movement forces.
+        /// </summary>
+        private void RunAutoStrafe()
+        {
+            if (!TitaniumCrabPlugin.Instance.AutoStrafeEnabled)
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            Rigidbody rb = pm.GetRb();
+            if (rb == null)
+                return;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return;
+
+            // Get desired movement direction from WASD relative to camera
+            Vector3 forward = cam.transform.forward;
+            forward.y = 0f;
+            forward.Normalize();
+            Vector3 right = cam.transform.right;
+            right.y = 0f;
+            right.Normalize();
+
+            Vector3 desiredDir = Vector3.zero;
+            if (Input.GetKey(KeyCode.W)) desiredDir += forward;
+            if (Input.GetKey(KeyCode.S)) desiredDir -= forward;
+            if (Input.GetKey(KeyCode.A)) desiredDir -= right;
+            if (Input.GetKey(KeyCode.D)) desiredDir += right;
+
+            Vector3 vel = rb.velocity;
+            Vector3 horizontal = new(vel.x, 0f, vel.z);
+            float currentSpeed = horizontal.magnitude;
+
+            if (desiredDir.sqrMagnitude > 0.01f)
+            {
+                // Player is giving input — steer velocity toward desired direction
+                desiredDir.Normalize();
+
+                if (currentSpeed > 0.1f)
+                {
+                    // Rotate velocity vector toward desired direction
+                    // High lerp = fast response (~2-3 frames to turn 90deg)
+                    float steerSpeed = 12f * Time.fixedDeltaTime;
+                    Vector3 currentDir = horizontal.normalized;
+                    Vector3 newDir = Vector3.Lerp(currentDir, desiredDir, steerSpeed);
+
+                    rb.velocity = new Vector3(newDir.x * currentSpeed, vel.y, newDir.z * currentSpeed);
+                }
+            }
+            else
+            {
+                // No input — kill horizontal velocity immediately (infinite friction)
+                // Only do this when grounded so air movement isn't affected
+                if (IsGrounded(pm) && currentSpeed > 0.1f)
+                {
+                    float stopSpeed = currentSpeed * (1f - 20f * Time.fixedDeltaTime);
+                    stopSpeed = Mathf.Max(0f, stopSpeed);
+                    Vector3 stopDir = horizontal.normalized;
+                    rb.velocity = new Vector3(stopDir.x * stopSpeed, vel.y, stopDir.z * stopSpeed);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Infinite Slap: when M1 (primary fire) is held, continuously call
+        /// Punch() with no cooldown. Sets the cooldown timer above threshold
+        /// and calls the Punch method directly every physics tick.
         /// </summary>
         private void RunAutoSlap()
         {
@@ -495,11 +570,16 @@ namespace TitaniumCrab
             if (punch == null)
                 return;
 
-            // Direct field access — same as CrabCheat's InfinityPunchModule
-            // field_Private_Boolean_0 = is punching
-            // field_Private_Single_0   = punch cooldown timer
-            punch.field_Private_Boolean_0 = true;
+            // Always reset cooldown so punch is always ready
             punch.field_Private_Single_0 = 3.1f;
+
+            // Only trigger punch when M1 (left mouse) is held
+            if (Input.GetKey(KeyCode.Mouse0))
+            {
+                punch.field_Private_Boolean_0 = true;
+                // Call the Punch method directly to trigger the slap
+                punch.Punch();
+            }
         }
 
         /// <summary>
