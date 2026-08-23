@@ -95,35 +95,23 @@ namespace TitaniumCrab
                 param_3 = param_3 || PlayerInput.CheckInputDown(InputManager.jump);
 
             // --- Auto-Strafe (bunnyhop assist) ---
+            // Instead of adding raw force (which causes wobble), we scale the
+            // player's max speed up and let the game's own movement handle
+            // acceleration. This gives smooth, controllable strafing.
             if (p.AutoStrafeEnabled)
             {
                 PlayerMovement pm = TrainerMenu.GetLocalPlayerMovement();
-                if (pm != null)
+                if (pm != null && !TrainerMenu.IsGrounded(pm))
                 {
-                    Rigidbody rb = pm.GetRb();
-                    if (rb != null && !TrainerMenu.IsGrounded(pm))
-                    {
-                        Camera cam = Camera.main;
-                        if (cam != null)
-                        {
-                            Vector3 right = cam.transform.right;
-                            right.y = 0f;
-                            right.Normalize();
-
-                            float strafeForce = 8f;
-                            Vector3 boost = Vector3.zero;
-                            if (Input.GetKey(KeyCode.D)) boost += right * strafeForce;
-                            if (Input.GetKey(KeyCode.A)) boost -= right * strafeForce;
-
-                            if (boost.sqrMagnitude > 0.01f)
-                            {
-                                Vector3 vel = rb.velocity;
-                                vel.x += boost.x * Time.fixedDeltaTime;
-                                vel.z += boost.z * Time.fixedDeltaTime;
-                                rb.velocity = vel;
-                            }
-                        }
-                    }
+                    // Increase max speeds so the game allows faster air control
+                    pm.SetMaxRunSpeed(20f);
+                    pm.SetMaxSpeed(15f);
+                }
+                else if (pm != null && TrainerMenu.IsGrounded(pm))
+                {
+                    // Restore defaults when grounded so normal movement isn't affected
+                    pm.SetMaxRunSpeed(13f);
+                    pm.SetMaxSpeed(6.5f);
                 }
             }
 

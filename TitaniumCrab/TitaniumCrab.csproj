@@ -124,5 +124,11 @@
       <HintPath>$(UnhollowedDir)/Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
+
+    <!-- AntiCheat Toolkit (for ObscuredFloat fields in PlayerMovement) -->
+    <Reference Include="ACTk.Runtime" Publicize="true">
+      <HintPath>$(UnhollowedDir)/ACTk.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 </Project>

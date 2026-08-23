@@ -23,6 +23,8 @@ namespace TitaniumCrab
         public bool MegaJumpEnabled;
         public bool NoFreezeEnabled;
         public bool AntiBoundKillsEnabled;
+        public bool StrongSprintEnabled;
+        public int SlideJumpKey;
 
         // Combat
         public bool GodModeEnabled;
@@ -49,6 +51,7 @@ namespace TitaniumCrab
         public float AimbotSmooth = 5.0f;
         public float SuperPunchMultiplier = 5.0f;
         public float MegaJumpForce = 20.0f;
+        public float StrongSprintMultiplier = 2.0f;
         public bool MenuVisible = true;
 
         // --- Config entries ---
@@ -64,6 +67,9 @@ namespace TitaniumCrab
         internal ConfigEntry<float> CfgMegaJumpForce;
         internal ConfigEntry<bool> CfgNoFreeze;
         internal ConfigEntry<bool> CfgAntiBoundKills;
+        internal ConfigEntry<bool> CfgStrongSprint;
+        internal ConfigEntry<float> CfgStrongSprintMultiplier;
+        internal ConfigEntry<int> CfgSlideJumpKey;
 
         internal ConfigEntry<bool> CfgGodMode;
         internal ConfigEntry<bool> CfgNoFall;
@@ -101,6 +107,9 @@ namespace TitaniumCrab
             CfgMegaJumpForce   = Config.Bind("Movement",  "MegaJumpForce",   20.0f, new ConfigDescription("Mega jump upward velocity", new AcceptableValueRange<float>(5f, 100f)));
             CfgNoFreeze        = Config.Bind("Movement",  "NoFreeze",        false, "Move before the round officially starts (ignore freeze)");
             CfgAntiBoundKills  = Config.Bind("Movement",  "AntiBoundKills",  false, "Float above out-of-bounds kill zones (water, lava, etc.)");
+            CfgStrongSprint    = Config.Bind("Movement",  "StrongSprint",    false, "Force sprint to stay active and multiply sprint speed");
+            CfgStrongSprintMultiplier = Config.Bind("Movement", "StrongSprintMultiplier", 2.0f, new ConfigDescription("Sprint speed multiplier", new AcceptableValueRange<float>(1f, 20f)));
+            CfgSlideJumpKey    = Config.Bind("Movement",  "SlideJumpKey",    (int)KeyCode.V, "Key to trigger slide-jump launch (jump + crouch simultaneously)");
 
             // --- Combat ---
             CfgGodMode         = Config.Bind("Combat",    "GodMode",         false, "Prevent all incoming damage");
@@ -126,8 +135,12 @@ namespace TitaniumCrab
 
             SyncFromConfig();
 
+            // Register and spawn the menu MonoBehaviour (same pattern as CrabCheat)
             ClassInjector.RegisterTypeInIl2Cpp<TrainerMenu>();
-            TrainerMenu.Create();
+            GameObject menuObj = new("TitaniumCrab_Menu");
+            UnityEngine.Object.DontDestroyOnLoad(menuObj);
+            menuObj.hideFlags |= HideFlags.HideAndDontSave;
+            menuObj.AddComponent<TrainerMenu>();
 
             Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll(typeof(Patches));
@@ -150,6 +163,9 @@ namespace TitaniumCrab
             MegaJumpForce        = CfgMegaJumpForce.Value;
             NoFreezeEnabled      = CfgNoFreeze.Value;
             AntiBoundKillsEnabled= CfgAntiBoundKills.Value;
+            StrongSprintEnabled  = CfgStrongSprint.Value;
+            StrongSprintMultiplier = CfgStrongSprintMultiplier.Value;
+            SlideJumpKey         = CfgSlideJumpKey.Value;
 
             GodModeEnabled       = CfgGodMode.Value;
             NoFallEnabled        = CfgNoFall.Value;
@@ -185,6 +201,9 @@ namespace TitaniumCrab
             CfgMegaJumpForce.Value = MegaJumpForce;
             CfgNoFreeze.Value      = NoFreezeEnabled;
             CfgAntiBoundKills.Value= AntiBoundKillsEnabled;
+            CfgStrongSprint.Value  = StrongSprintEnabled;
+            CfgStrongSprintMultiplier.Value = StrongSprintMultiplier;
+            CfgSlideJumpKey.Value  = SlideJumpKey;
 
             CfgGodMode.Value       = GodModeEnabled;
             CfgNoFall.Value        = NoFallEnabled;

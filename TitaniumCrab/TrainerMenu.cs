@@ -11,7 +11,6 @@ namespace TitaniumCrab
     /// </summary>
     public class TrainerMenu : MonoBehaviour
     {
-        private static TrainerMenu _instance;
         private Rect _menuRect = new(20f, 20f, 340f, 580f);
         private bool _menuVisible = true;
         private KeyCode _menuKey = KeyCode.Insert;
@@ -27,16 +26,6 @@ namespace TitaniumCrab
         private float _killHeight = float.NaN;
 
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
-
-        internal static void Create()
-        {
-            if (_instance != null)
-                return;
-
-            GameObject go = new("TitaniumCrab_Menu");
-            _instance = go.AddComponent<TrainerMenu>();
-            UnityEngine.Object.DontDestroyOnLoad(go);
-        }
 
         private void Awake()
         {
@@ -64,6 +53,8 @@ namespace TitaniumCrab
             RunAutoSlap();
             RunAntiBoundKills();
             RunFullbright();
+            RunStrongSprint();
+            RunSlideJump();
         }
 
         private void OnGUI()
@@ -142,6 +133,10 @@ namespace TitaniumCrab
                 p.MegaJumpForce    = SliderRow("Jump Force",     p.MegaJumpForce, 5f, 100f);
             p.NoFreezeEnabled      = ToggleRow("No Freeze",      p.NoFreezeEnabled);
             p.AntiBoundKillsEnabled= ToggleRow("Anti-Bound Kills",p.AntiBoundKillsEnabled);
+            p.StrongSprintEnabled  = ToggleRow("Strong Sprint",  p.StrongSprintEnabled);
+            if (p.StrongSprintEnabled)
+                p.StrongSprintMultiplier = SliderRow("Sprint x", p.StrongSprintMultiplier, 1f, 20f);
+            GUILayout.Label($"Slide Jump Key: {((KeyCode)p.SlideJumpKey)} (hold to launch)", _labelStyle);
 
             GUILayout.Space(6);
 
@@ -566,6 +561,86 @@ namespace TitaniumCrab
                 light.intensity = 3f;
                 light.range = 100f;
             }
+        }
+
+        /// <summary>
+        /// Strong Sprint: once you start sprinting, continuously re-enable
+        /// sprint every frame so nothing can stop it (stamina, game modes,
+        /// knockback, etc.). Also multiplies the max run speed by the
+        /// configured multiplier so you sprint faster than normal.
+        /// </summary>
+        private void RunStrongSprint()
+        {
+            var p = TitaniumCrabPlugin.Instance;
+            if (!p.StrongSprintEnabled)
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            // Force sprint to stay on every frame — even if the game tries to
+            // disable it (stamina drain, game mode rules, etc.)
+            pm.SetSprinting(true);
+
+            // Multiply the game's default max run speed (13) by our multiplier
+            // Default max run speed is 13, default max walk speed is 6.5
+            pm.SetMaxRunSpeed(13f * p.StrongSprintMultiplier);
+            pm.SetMaxSpeed(6.5f * p.StrongSprintMultiplier);
+        }
+
+        /// <summary>
+        /// Slide Jump: when the configured key is held, simultaneously trigger
+        /// jump + crouch to launch the player in the camera's facing direction.
+        /// This is the "crouch jump" mechanic from Crab Game — pressing jump
+        /// and crouch at the same time launches you forward/upward.
+        /// We apply a forward boost based on camera direction + upward velocity.
+        /// </summary>
+        private void RunSlideJump()
+        {
+            var p = TitaniumCrabPlugin.Instance;
+            var slideKey = (KeyCode)p.SlideJumpKey;
+
+            if (!Input.GetKey(slideKey))
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            Rigidbody rb = pm.GetRb();
+            if (rb == null)
+                return;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return;
+
+            // Get camera forward direction (flattened to horizontal)
+            Vector3 fwd = cam.transform.forward;
+            fwd.y = 0f;
+            fwd.Normalize();
+
+            // Apply launch: strong forward boost + upward boost
+            // This mimics the slide-jump/crouch-jump mechanic
+            float launchForce = 15f;
+            float upForce = 8f;
+
+            Vector3 vel = rb.velocity;
+            // Only boost if we're moving slowly enough (prevents infinite stacking)
+            float horizontalSpeed = new Vector2(vel.x, vel.z).magnitude;
+            if (horizontalSpeed < 25f)
+            {
+                vel.x += fwd.x * launchForce * Time.deltaTime * 10f;
+                vel.z += fwd.z * launchForce * Time.deltaTime * 10f;
+            }
+            // Only boost upward if we're near ground or moving up slowly
+            if (vel.y < 5f && IsGrounded(pm))
+            {
+                vel.y = upForce;
+            }
+
+            rb.velocity = vel;
         }
 
         // =====================================================================
