@@ -40,6 +40,7 @@ namespace TitaniumCrab
         public bool EspEnabled;
         public bool FovModifierEnabled;
         public bool FullbrightEnabled;
+        public bool NoCameraShakeEnabled;
 
         // Misc
         public bool AntiAntiCheatEnabled = true;
@@ -88,6 +89,7 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgFovModifier;
         internal ConfigEntry<float> CfgFovValue;
         internal ConfigEntry<bool> CfgFullbright;
+        internal ConfigEntry<bool> CfgNoCameraShake;
 
         internal ConfigEntry<bool> CfgAntiAntiCheat;
         internal ConfigEntry<int> CfgMenuKey;
@@ -131,6 +133,7 @@ namespace TitaniumCrab
             CfgFovModifier     = Config.Bind("Visual",    "FovModifier",     false, "Override camera field-of-view");
             CfgFovValue        = Config.Bind("Visual",    "FovValue",        90.0f, new ConfigDescription("Camera FOV in degrees", new AcceptableValueRange<float>(20f, 170f)));
             CfgFullbright      = Config.Bind("Visual",    "Fullbright",      false, "Max out all scene lights (see in dark/Dorm mode)");
+            CfgNoCameraShake   = Config.Bind("Visual",    "NoCameraShake",   false, "Disable all camera shake (gun, punch, damage) — useful with Infinite Slap");
 
             // --- Misc ---
             CfgAntiAntiCheat   = Config.Bind("Misc",      "AntiAntiCheat",   true,  "Bypass BepInEx / modding detection (recommended)");
@@ -193,6 +196,7 @@ namespace TitaniumCrab
             FovModifierEnabled   = CfgFovModifier.Value;
             FovValue             = CfgFovValue.Value;
             FullbrightEnabled    = CfgFullbright.Value;
+            NoCameraShakeEnabled = CfgNoCameraShake.Value;
 
             AntiAntiCheatEnabled = CfgAntiAntiCheat.Value;
         }
@@ -232,6 +236,7 @@ namespace TitaniumCrab
             CfgFovModifier.Value   = FovModifierEnabled;
             CfgFovValue.Value      = FovValue;
             CfgFullbright.Value    = FullbrightEnabled;
+            CfgNoCameraShake.Value = NoCameraShakeEnabled;
 
             CfgAntiAntiCheat.Value = AntiAntiCheatEnabled;
         }

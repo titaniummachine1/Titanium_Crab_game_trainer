@@ -66,6 +66,18 @@ namespace TitaniumCrab
         }
 
         // =====================================================================
+        //  No Camera Shake: disable all camera shake methods
+        //  (gun shake, push shake, damage shake)
+        // =====================================================================
+
+        [HarmonyPatch(typeof(CameraShaker), nameof(CameraShaker.GunShake))]
+        [HarmonyPatch(typeof(CameraShaker), nameof(CameraShaker.PushShake))]
+        [HarmonyPatch(typeof(CameraShaker), nameof(CameraShaker.DamageShake))]
+        [HarmonyPrefix]
+        internal static bool DisableCameraShake()
+            => !TitaniumCrabPlugin.Instance.NoCameraShakeEnabled;
+
+        // =====================================================================
         //  God Mode + No Fall: patch PlayerStatus.DamagePlayer
         //  itemId == -2 is fall damage.
         // =====================================================================

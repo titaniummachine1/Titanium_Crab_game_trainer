@@ -186,6 +186,7 @@ namespace TitaniumCrab
             if (p.FovModifierEnabled)
                 p.FovValue         = SliderRow("FOV",            p.FovValue, 20f, 170f);
             p.FullbrightEnabled    = ToggleRow("Fullbright",     p.FullbrightEnabled);
+            p.NoCameraShakeEnabled = ToggleRow("No Camera Shake",p.NoCameraShakeEnabled);
 
             GUILayout.Space(6);
 

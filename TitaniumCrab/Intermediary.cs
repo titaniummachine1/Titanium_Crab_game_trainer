@@ -6,6 +6,7 @@
 // ================================= ============================================ //
 
 global using CameraController = MonoBehaviourPublicGacaInSiAucamuclAumoUnique;
+global using CameraShaker = MonoBehaviourPublicShdaguShpuheObShInShUnique;
 
 global using ClientSend = MonoBehaviourPublicInpabyInInInUnique;
 
