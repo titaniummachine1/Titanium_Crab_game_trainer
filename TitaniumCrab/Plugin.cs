@@ -29,6 +29,7 @@ namespace TitaniumCrab
         // Combat
         public bool GodModeEnabled;
         public bool NoFallEnabled;
+        public bool AntiEnvKillEnabled;
         public bool InfiniteAmmoEnabled;
         public bool AimbotEnabled;
         public bool AutoSlapEnabled;
@@ -73,6 +74,7 @@ namespace TitaniumCrab
 
         internal ConfigEntry<bool> CfgGodMode;
         internal ConfigEntry<bool> CfgNoFall;
+        internal ConfigEntry<bool> CfgAntiEnvKill;
         internal ConfigEntry<bool> CfgInfiniteAmmo;
         internal ConfigEntry<bool> CfgAimbot;
         internal ConfigEntry<float> CfgAimbotFOV;
@@ -114,6 +116,7 @@ namespace TitaniumCrab
             // --- Combat ---
             CfgGodMode         = Config.Bind("Combat",    "GodMode",         false, "Prevent all incoming damage");
             CfgNoFall          = Config.Bind("Combat",    "NoFall",          false, "Prevent fall damage only");
+            CfgAntiEnvKill     = Config.Bind("Combat",    "AntiEnvKill",     false, "Prevent death from environmental hazards (falling off map, water, lava)");
             CfgInfiniteAmmo    = Config.Bind("Combat",    "InfiniteAmmo",    false, "Guns never run out of ammo");
             CfgAimbot          = Config.Bind("Combat",    "Aimbot",          false, "Automatically aim at the nearest visible player");
             CfgAimbotFOV       = Config.Bind("Combat",    "AimbotFOV",       30.0f, new ConfigDescription("Aimbot field-of-view (degrees)", new AcceptableValueRange<float>(1f, 180f)));
@@ -176,6 +179,7 @@ namespace TitaniumCrab
 
             GodModeEnabled       = CfgGodMode.Value;
             NoFallEnabled        = CfgNoFall.Value;
+            AntiEnvKillEnabled   = CfgAntiEnvKill.Value;
             InfiniteAmmoEnabled  = CfgInfiniteAmmo.Value;
             AimbotEnabled        = CfgAimbot.Value;
             AimbotFOV            = CfgAimbotFOV.Value;
@@ -214,6 +218,7 @@ namespace TitaniumCrab
 
             CfgGodMode.Value       = GodModeEnabled;
             CfgNoFall.Value        = NoFallEnabled;
+            CfgAntiEnvKill.Value   = AntiEnvKillEnabled;
             CfgInfiniteAmmo.Value  = InfiniteAmmoEnabled;
             CfgAimbot.Value        = AimbotEnabled;
             CfgAimbotFOV.Value     = AimbotFOV;

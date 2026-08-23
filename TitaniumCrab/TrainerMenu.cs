@@ -166,6 +166,7 @@ namespace TitaniumCrab
             p.AntiPushEnabled      = ToggleRow("Anti Push",      p.AntiPushEnabled);
             p.GodModeEnabled       = ToggleRow("God Mode",       p.GodModeEnabled);
             p.NoFallEnabled        = ToggleRow("No Fall Damage", p.NoFallEnabled);
+            p.AntiEnvKillEnabled   = ToggleRow("Anti Env Kill",  p.AntiEnvKillEnabled);
             p.InfiniteAmmoEnabled  = ToggleRow("Infinite Ammo",  p.InfiniteAmmoEnabled);
             p.AimbotEnabled        = ToggleRow("Aimbot",         p.AimbotEnabled);
             if (p.AimbotEnabled)
@@ -435,28 +436,13 @@ namespace TitaniumCrab
             if (!TitaniumCrabPlugin.Instance.GodModeEnabled)
                 return;
 
-            PlayerStatus ps = GetLocalPlayerStatus();
-            if (ps == null)
-                return;
-
+            // Set currentHp to 100 every frame as ObscuredInt (ACTk)
+            // This is the same approach as CrabCheat's GodModeModule
             try
             {
-                // PlayerStatus.Instance.currentHp is the standard field
-                var curField = AccessTools.Field(ps.GetType(), "currentHp")
-                             ?? AccessTools.Field(ps.GetType(), "currentHealth")
-                             ?? AccessTools.Field(ps.GetType(), "health")
-                             ?? AccessTools.Field(ps.GetType(), "hp");
-                var maxField = AccessTools.Field(ps.GetType(), "maxHp")
-                             ?? AccessTools.Field(ps.GetType(), "maxHealth");
-                if (curField != null && maxField != null)
-                {
-                    float maxVal = System.Convert.ToSingle(maxField.GetValue(ps));
-                    float curVal = System.Convert.ToSingle(curField.GetValue(ps));
-                    if (maxVal > 0 && curVal < maxVal)
-                        curField.SetValue(ps, maxVal);
-                }
+                PlayerStatus.Instance.currentHp = new CodeStage.AntiCheat.ObscuredTypes.ObscuredInt(100);
             }
-            catch { /* field names may differ */ }
+            catch { /* not in game yet */ }
         }
 
         private void RunInfiniteAmmo()

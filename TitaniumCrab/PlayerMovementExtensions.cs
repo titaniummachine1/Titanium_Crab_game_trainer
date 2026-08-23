@@ -8,6 +8,12 @@ namespace TitaniumCrab
     /// </summary>
     internal static class PlayerMovementExtensions
     {
+        // --- Sprinting (prop_Boolean_2 in unhollowed assembly) ---
+        public static bool IsSprinting(this PlayerMovement movement)
+            => movement.prop_Boolean_2;
+
+        public static void SetSprinting(this PlayerMovement movement, bool sprinting)
+            => movement.prop_Boolean_2 = sprinting;
         // --- Jump Force ---
         public static float GetJumpForce(this PlayerMovement movement)
             => movement.field_Private_Single_3;
@@ -35,12 +41,5 @@ namespace TitaniumCrab
 
         public static void SetMoveSpeed(this PlayerMovement movement, float moveSpeed)
             => movement.field_Private_ObscuredFloat_0 = new ObscuredFloat(moveSpeed);
-
-        // --- Sprinting (prop_Boolean_2 in unhollowed assembly) ---
-        public static bool IsSprinting(this PlayerMovement movement)
-            => movement.prop_Boolean_2;
-
-        public static void SetSprinting(this PlayerMovement movement, bool sprinting)
-            => movement.prop_Boolean_2 = sprinting;
     }
 }

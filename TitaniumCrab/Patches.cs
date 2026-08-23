@@ -83,6 +83,32 @@ namespace TitaniumCrab
         }
 
         // =====================================================================
+        //  Anti Env Kill: prevent death from environmental hazards
+        //  (falling off map, water, lava, out-of-bounds)
+        //  Patches PlayerDied to block death when the killer is environment
+        //  (param_2 == 0 means no killer player = environmental death)
+        // =====================================================================
+
+        [HarmonyPatch(typeof(GameManager), nameof(GameManager.PlayerDied))]
+        [HarmonyPrefix]
+        internal static bool PrePlayerDied(ulong param_1, ulong param_2)
+        {
+            if (!TitaniumCrabPlugin.Instance.AntiEnvKillEnabled)
+                return true;
+
+            ulong myId = SteamUser.GetSteamID().m_SteamID;
+            if (param_1 != myId)
+                return true;
+
+            // param_2 == 0 means no killer = environmental death (fall, water, lava)
+            // Block it — the player will just stay alive
+            if (param_2 == 0)
+                return false;
+
+            return true;
+        }
+
+        // =====================================================================
         //  Super Punch + Anti Push: patch GameManager.PunchPlayer
         //  param_1 = fromClient (ulong), param_2 = punchedPlayer (ulong),
         //  param_3 = direction (Vector3)
@@ -90,7 +116,7 @@ namespace TitaniumCrab
 
         [HarmonyPatch(typeof(GameManager), nameof(GameManager.PunchPlayer))]
         [HarmonyPrefix]
-        internal static bool PrePunchPlayer(ref ulong param_1, ref ulong param_2, ref Vector3 param_3)
+        internal static bool PrePunchPlayer(ulong param_1, ulong param_2, ref Vector3 param_3)
         {
             var p = TitaniumCrabPlugin.Instance;
             ulong myId = SteamUser.GetSteamID().m_SteamID;
@@ -134,24 +160,64 @@ namespace TitaniumCrab
             if (p.AirJumpEnabled)
                 param_3 = param_3 || PlayerInput.CheckInputDown(InputManager.jump);
 
-            // --- Auto-Strafe (bunnyhop assist) ---
-            // Instead of adding raw force (which causes wobble), we scale the
-            // player's max speed up and let the game's own movement handle
-            // acceleration. This gives smooth, controllable strafing.
+            // --- Auto-Strafe (velocity vector steering) ---
+            // Like Minecraft's "accurate walk": smoothly rotates the player's
+            // velocity vector to match the desired movement direction with high
+            // acceleration. This gives precise control when turning — no drift,
+            // no wobble. Works both grounded and airborne.
             if (p.AutoStrafeEnabled)
             {
                 PlayerMovement pm = TrainerMenu.GetLocalPlayerMovement();
-                if (pm != null && !TrainerMenu.IsGrounded(pm))
+                if (pm == null)
+                    return;
+
+                Rigidbody rb = pm.GetRb();
+                if (rb == null)
+                    return;
+
+                Camera cam = Camera.main;
+                if (cam == null)
+                    return;
+
+                // Get desired movement direction from WASD input relative to camera
+                Vector3 forward = cam.transform.forward;
+                forward.y = 0f;
+                forward.Normalize();
+                Vector3 right = cam.transform.right;
+                right.y = 0f;
+                right.Normalize();
+
+                Vector3 desiredDir = Vector3.zero;
+                if (Input.GetKey(KeyCode.W)) desiredDir += forward;
+                if (Input.GetKey(KeyCode.S)) desiredDir -= forward;
+                if (Input.GetKey(KeyCode.A)) desiredDir -= right;
+                if (Input.GetKey(KeyCode.D)) desiredDir += right;
+
+                if (desiredDir.sqrMagnitude > 0.01f)
                 {
-                    // Increase max speeds so the game allows faster air control
-                    pm.SetMaxRunSpeed(20f);
-                    pm.SetMaxSpeed(15f);
-                }
-                else if (pm != null && TrainerMenu.IsGrounded(pm))
-                {
-                    // Restore defaults when grounded so normal movement isn't affected
-                    pm.SetMaxRunSpeed(13f);
-                    pm.SetMaxSpeed(6.5f);
+                    desiredDir.Normalize();
+
+                    // Get current horizontal velocity
+                    Vector3 vel = rb.velocity;
+                    Vector3 horizontal = new(vel.x, 0f, vel.z);
+                    float currentSpeed = horizontal.magnitude;
+
+                    if (currentSpeed > 0.1f)
+                    {
+                        // Steer: rotate velocity vector toward desired direction
+                        // High lerp factor = fast response, but not instant (no snap)
+                        // 0.3 = ~3 frames to fully turn at 60fps, feels responsive
+                        float steerSpeed = 8f * Time.fixedDeltaTime;
+                        Vector3 currentDir = horizontal.normalized;
+                        Vector3 newDir = Vector3.Lerp(currentDir, desiredDir, steerSpeed);
+
+                        // Preserve speed but redirect it
+                        rb.velocity = new Vector3(
+                            newDir.x * currentSpeed,
+                            vel.y,
+                            newDir.z * currentSpeed
+                        );
+                    }
                 }
             }
         }
