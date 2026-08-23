@@ -27,6 +27,23 @@ namespace TitaniumCrab
         public int SlideJumpKey;
         public int ClickTpKey;
 
+        // Movement extras
+        public bool GravityToggleEnabled;
+        public bool PermaSlideEnabled;
+        public bool BlinkEnabled;
+        public int SavePosKey;
+        public int RestorePosKey;
+
+        // Combat extras
+        public bool NoRecoilEnabled;
+        public bool RapidfireEnabled;
+        public bool DisableTrapsEnabled;
+        public bool AntiTagEnabled;
+
+        // Misc extras
+        public bool ChatSpammerEnabled;
+        public string ChatSpammerText = "TitaniumCrab!";
+
         // Combat
         public bool GodModeEnabled;
         public bool NoFallEnabled;
@@ -80,6 +97,17 @@ namespace TitaniumCrab
         internal ConfigEntry<float> CfgStrongSprintMultiplier;
         internal ConfigEntry<int> CfgSlideJumpKey;
         internal ConfigEntry<int> CfgClickTpKey;
+        internal ConfigEntry<bool> CfgGravityToggle;
+        internal ConfigEntry<bool> CfgPermaSlide;
+        internal ConfigEntry<bool> CfgBlink;
+        internal ConfigEntry<int> CfgSavePosKey;
+        internal ConfigEntry<int> CfgRestorePosKey;
+        internal ConfigEntry<bool> CfgNoRecoil;
+        internal ConfigEntry<bool> CfgRapidfire;
+        internal ConfigEntry<bool> CfgDisableTraps;
+        internal ConfigEntry<bool> CfgAntiTag;
+        internal ConfigEntry<bool> CfgChatSpammer;
+        internal ConfigEntry<string> CfgChatSpammerText;
 
         internal ConfigEntry<bool> CfgGodMode;
         internal ConfigEntry<bool> CfgNoFall;
@@ -129,6 +157,17 @@ namespace TitaniumCrab
             CfgStrongSprintMultiplier = Config.Bind("Movement", "StrongSprintMultiplier", 2.0f, new ConfigDescription("Sprint speed multiplier", new AcceptableValueRange<float>(1f, 20f)));
             CfgSlideJumpKey    = Config.Bind("Movement",  "SlideJumpKey",    (int)KeyCode.V, "Key to trigger slide-jump launch (jump + crouch simultaneously)");
             CfgClickTpKey      = Config.Bind("Movement",  "ClickTpKey",      (int)KeyCode.T, "Key to teleport to where you're looking (raycast hit point)");
+            CfgGravityToggle   = Config.Bind("Movement",  "GravityToggle",   false, "Remove gravity (float in place)");
+            CfgPermaSlide      = Config.Bind("Movement",  "PermaSlide",      false, "Slide permanently without needing speed");
+            CfgBlink           = Config.Bind("Movement",  "Blink",           false, "Freeze position updates to server — other players don't see you move");
+            CfgSavePosKey      = Config.Bind("Movement",  "SavePosKey",      (int)KeyCode.F5, "Key to save current position");
+            CfgRestorePosKey   = Config.Bind("Movement",  "RestorePosKey",   (int)KeyCode.F6, "Key to teleport to saved position");
+            CfgNoRecoil        = Config.Bind("Combat",    "NoRecoil",        false, "Remove gun recoil when shooting");
+            CfgRapidfire       = Config.Bind("Combat",    "Rapidfire",       false, "Auto-fire guns while holding M1");
+            CfgDisableTraps    = Config.Bind("Combat",    "DisableTraps",    false, "Immune to spikes, mines, and all map traps (experimental)");
+            CfgAntiTag         = Config.Bind("Combat",    "AntiTag",         false, "Prevent players from tagging/stealing crown from you (experimental)");
+            CfgChatSpammer     = Config.Bind("Misc",      "ChatSpammer",     false, "Auto-spam chat messages");
+            CfgChatSpammerText = Config.Bind("Misc",      "ChatSpammerText", "TitaniumCrab!", "Text to spam in chat");
 
             // --- Combat ---
             CfgGodMode         = Config.Bind("Combat",    "GodMode",         false, "Prevent all incoming damage");
@@ -172,6 +211,9 @@ namespace TitaniumCrab
             Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll(typeof(Patches));
             Patches.ApplySilentAimPatches(harmony);
+            Patches.ApplyNoRecoilPatch(harmony);
+            Patches.ApplyBlinkPatch(harmony);
+            Patches.ApplyAntiTagPatch(harmony);
 
             // Disable ACTk anti-cheat detectors at startup (non-blocking approach)
             if (AntiAntiCheatEnabled)
@@ -202,6 +244,17 @@ namespace TitaniumCrab
             StrongSprintMultiplier = CfgStrongSprintMultiplier.Value;
             SlideJumpKey         = CfgSlideJumpKey.Value;
             ClickTpKey           = CfgClickTpKey.Value;
+            GravityToggleEnabled = CfgGravityToggle.Value;
+            PermaSlideEnabled    = CfgPermaSlide.Value;
+            BlinkEnabled         = CfgBlink.Value;
+            SavePosKey           = CfgSavePosKey.Value;
+            RestorePosKey        = CfgRestorePosKey.Value;
+            NoRecoilEnabled      = CfgNoRecoil.Value;
+            RapidfireEnabled     = CfgRapidfire.Value;
+            DisableTrapsEnabled  = CfgDisableTraps.Value;
+            AntiTagEnabled       = CfgAntiTag.Value;
+            ChatSpammerEnabled   = CfgChatSpammer.Value;
+            ChatSpammerText      = CfgChatSpammerText.Value;
 
             GodModeEnabled       = CfgGodMode.Value;
             NoFallEnabled        = CfgNoFall.Value;
@@ -249,6 +302,17 @@ namespace TitaniumCrab
             CfgStrongSprintMultiplier.Value = StrongSprintMultiplier;
             CfgSlideJumpKey.Value  = SlideJumpKey;
             CfgClickTpKey.Value    = ClickTpKey;
+            CfgGravityToggle.Value = GravityToggleEnabled;
+            CfgPermaSlide.Value    = PermaSlideEnabled;
+            CfgBlink.Value         = BlinkEnabled;
+            CfgSavePosKey.Value    = SavePosKey;
+            CfgRestorePosKey.Value = RestorePosKey;
+            CfgNoRecoil.Value      = NoRecoilEnabled;
+            CfgRapidfire.Value     = RapidfireEnabled;
+            CfgDisableTraps.Value  = DisableTrapsEnabled;
+            CfgAntiTag.Value       = AntiTagEnabled;
+            CfgChatSpammer.Value   = ChatSpammerEnabled;
+            CfgChatSpammerText.Value = ChatSpammerText;
 
             CfgGodMode.Value       = GodModeEnabled;
             CfgNoFall.Value        = NoFallEnabled;

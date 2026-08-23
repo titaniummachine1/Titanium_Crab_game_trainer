@@ -38,6 +38,12 @@ namespace TitaniumCrab
         // Glass/Ice destroy sub-menu state (0=none, 1=glass choosing, 2=ice choosing)
         private int _destroySubMenu = 0;
 
+        // Saved position for Save/Restore Position feature
+        private Vector3? _savedPosition = null;
+
+        // Chat spammer timer
+        private float _chatSpamTimer;
+
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
 
         private void Awake()
@@ -69,6 +75,11 @@ namespace TitaniumCrab
             RunStrongSprint();
             RunSlideJump();
             RunClickTp();
+            RunGravityToggle();
+            RunPermaSlide();
+            RunSaveRestorePos();
+            RunRapidfire();
+            RunChatSpammer();
 
             // Delayed anti-cheat GameObject destruction (30s after load)
             if (_antiCheatTimer > 0f)
@@ -198,6 +209,11 @@ namespace TitaniumCrab
                 p.StrongSprintMultiplier = SliderRow("Sprint x", p.StrongSprintMultiplier, 1f, 20f);
             p.SlideJumpKey         = KeyBindRow("Slide Jump Key",p.SlideJumpKey);
             p.ClickTpKey           = KeyBindRow("Click TP Key",  p.ClickTpKey);
+            p.GravityToggleEnabled = ToggleRow("Gravity Toggle", p.GravityToggleEnabled);
+            p.PermaSlideEnabled    = ToggleRow("Perma Slide",    p.PermaSlideEnabled);
+            p.BlinkEnabled         = ToggleRow("Blink",          p.BlinkEnabled);
+            p.SavePosKey           = KeyBindRow("Save Pos Key",  p.SavePosKey);
+            p.RestorePosKey        = KeyBindRow("Restore Pos Key",p.RestorePosKey);
         }
 
         private void DrawCombatTab(TitaniumCrabPlugin p)
@@ -213,6 +229,10 @@ namespace TitaniumCrab
             if (p.SuperPunchEnabled)
                 p.SuperPunchMultiplier = SliderRow("Knockback x", p.SuperPunchMultiplier, 0f, 50f);
             p.AntiPushEnabled      = ToggleRow("Anti Push",      p.AntiPushEnabled);
+            p.NoRecoilEnabled      = ToggleRow("No Recoil",      p.NoRecoilEnabled);
+            p.RapidfireEnabled     = ToggleRow("Rapidfire",      p.RapidfireEnabled);
+            p.DisableTrapsEnabled  = ToggleRow("Disable Traps",  p.DisableTrapsEnabled);
+            p.AntiTagEnabled       = ToggleRow("Anti Tag",       p.AntiTagEnabled);
 
             GUILayout.Space(4);
             SectionLabel("AIMBOT");
@@ -285,6 +305,14 @@ namespace TitaniumCrab
         private void DrawMiscTab(TitaniumCrabPlugin p)
         {
             p.AntiAntiCheatEnabled = ToggleRow("Anti-AntiCheat", p.AntiAntiCheatEnabled);
+            p.ChatSpammerEnabled   = ToggleRow("Chat Spammer",   p.ChatSpammerEnabled);
+            if (p.ChatSpammerEnabled)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Spam Text:", _labelStyle, GUILayout.Width(80));
+                p.ChatSpammerText = GUILayout.TextField(p.ChatSpammerText, GUILayout.Width(200));
+                GUILayout.EndHorizontal();
+            }
 
             GUILayout.Space(8);
 
@@ -1114,6 +1142,160 @@ namespace TitaniumCrab
             rb.velocity = Vector3.zero; // kill momentum to prevent glitching
 
             TitaniumCrabPlugin.Instance.Log.LogInfo($"ClickTP: teleported to {targetPos}");
+        }
+
+        // =====================================================================
+        //  New movement/combat/misc features
+        // =====================================================================
+
+        /// <summary>
+        /// Gravity Toggle: remove gravity from the player's rigidbody.
+        /// </summary>
+        private void RunGravityToggle()
+        {
+            if (!TitaniumCrabPlugin.Instance.GravityToggleEnabled)
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            Rigidbody rb = pm.GetRb();
+            if (rb == null)
+                return;
+
+            rb.useGravity = false;
+            // Add slight drag so player doesn't drift forever
+            if (rb.drag < 2f)
+                rb.drag = 2f;
+        }
+
+        /// <summary>
+        /// Perma Slide: force the player into sliding state.
+        /// Uses reflection to set the crouch/slide state on PlayerMovement.
+        /// </summary>
+        private void RunPermaSlide()
+        {
+            if (!TitaniumCrabPlugin.Instance.PermaSlideEnabled)
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            // PlayerMovement has a crouch state enum — force it to sliding
+            // The CrouchState enum has values like Standing, Crouching, Sliding
+            // We try to set it via reflection
+            try
+            {
+                var type = pm.GetType();
+                // Try to find the crouch state field
+                var stateField = AccessTools.Field(type, "crouchState")
+                               ?? AccessTools.Field(type, "field_Public_EnumNPrivateSealedvaNoCrSl4vUnique_0");
+                if (stateField != null)
+                {
+                    // Enum values: 0=Standing, 1=Crouching, 2=Sliding (typically)
+                    // Try setting to 2 (Sliding)
+                    stateField.SetValue(pm, System.Enum.ToObject(stateField.FieldType, 2));
+                }
+            }
+            catch { /* not in game or field not found */ }
+        }
+
+        /// <summary>
+        /// Save/Restore Position: F5 saves, F6 teleports back.
+        /// </summary>
+        private void RunSaveRestorePos()
+        {
+            var p = TitaniumCrabPlugin.Instance;
+
+            if (Input.GetKeyDown((KeyCode)p.SavePosKey))
+            {
+                PlayerMovement pm = GetLocalPlayerMovement();
+                if (pm != null)
+                {
+                    Rigidbody rb = pm.GetRb();
+                    if (rb != null)
+                    {
+                        _savedPosition = rb.position;
+                        TitaniumCrabPlugin.Instance.Log.LogInfo($"Position saved: {_savedPosition}");
+                    }
+                }
+            }
+
+            if (Input.GetKeyDown((KeyCode)p.RestorePosKey))
+            {
+                if (_savedPosition.HasValue)
+                {
+                    PlayerMovement pm = GetLocalPlayerMovement();
+                    if (pm != null)
+                    {
+                        Rigidbody rb = pm.GetRb();
+                        if (rb != null)
+                        {
+                            rb.position = _savedPosition.Value;
+                            rb.velocity = Vector3.zero;
+                            TitaniumCrabPlugin.Instance.Log.LogInfo($"Position restored: {_savedPosition}");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Rapidfire: auto-fire guns while holding M1.
+        /// Calls ShootGun repeatedly while left mouse is held.
+        /// </summary>
+        private void RunRapidfire()
+        {
+            if (!TitaniumCrabPlugin.Instance.RapidfireEnabled)
+                return;
+
+            if (!Input.GetMouseButton(0))
+                return;
+
+            try
+            {
+                // Call ClientSend.ShootGun with current camera angles
+                Camera cam = Camera.main;
+                if (cam == null)
+                    return;
+
+                Vector2 angles = new Vector2(
+                    -cam.transform.eulerAngles.x,
+                    cam.transform.eulerAngles.y
+                );
+
+                // Use reflection since ShootGun isn't exposed in interop
+                var shootMethod = AccessTools.Method(typeof(ClientSend), "ShootGun");
+                if (shootMethod != null)
+                    shootMethod.Invoke(null, new object[] { angles });
+            }
+            catch { /* not in game or can't shoot */ }
+        }
+
+        /// <summary>
+        /// Chat Spammer: auto-send chat messages at regular intervals.
+        /// Uses reflection to call ClientSend.SendChatMessage.
+        /// </summary>
+        private void RunChatSpammer()
+        {
+            if (!TitaniumCrabPlugin.Instance.ChatSpammerEnabled)
+                return;
+
+            _chatSpamTimer -= Time.deltaTime;
+            if (_chatSpamTimer > 0f)
+                return;
+
+            _chatSpamTimer = 1.5f; // spam every 1.5 seconds
+
+            try
+            {
+                var sendMethod = AccessTools.Method(typeof(ClientSend), "SendChatMessage");
+                if (sendMethod != null)
+                    sendMethod.Invoke(null, new object[] { TitaniumCrabPlugin.Instance.ChatSpammerText });
+            }
+            catch { /* not in game or chat not available */ }
         }
 
         // =====================================================================

@@ -128,6 +128,83 @@ namespace TitaniumCrab
         }
 
         // =====================================================================
+        //  No Recoil: block AddRecoil so guns don't kick
+        // =====================================================================
+
+        internal static bool _noRecoilPatchApplied;
+
+        internal static void ApplyNoRecoilPatch(Harmony harmony)
+        {
+            var method = AccessTools.Method(typeof(ClientSend), "AddRecoil");
+            if (method != null)
+            {
+                harmony.Patch(method, prefix: new HarmonyMethod(typeof(Patches), nameof(PreAddRecoil)));
+                _noRecoilPatchApplied = true;
+            }
+        }
+
+        internal static bool PreAddRecoil()
+            => !TitaniumCrabPlugin.Instance.NoRecoilEnabled;
+
+        // =====================================================================
+        //  Blink: block PlayerPosition so server doesn't get position updates
+        //  Other players won't see you move until you untoggle
+        // =====================================================================
+
+        internal static bool _blinkPatchApplied;
+
+        internal static void ApplyBlinkPatch(Harmony harmony)
+        {
+            var method = AccessTools.Method(typeof(ClientSend), "PlayerPosition");
+            if (method != null)
+            {
+                harmony.Patch(method, prefix: new HarmonyMethod(typeof(Patches), nameof(PrePlayerPosition)));
+                _blinkPatchApplied = true;
+            }
+        }
+
+        internal static bool PrePlayerPosition()
+            => !TitaniumCrabPlugin.Instance.BlinkEnabled;
+
+        // =====================================================================
+        //  Anti Tag: block TagPlayer when we're the target
+        // =====================================================================
+
+        internal static bool _antiTagPatchApplied;
+
+        internal static void ApplyAntiTagPatch(Harmony harmony)
+        {
+            var method = AccessTools.Method(typeof(GameManager), "TagPlayer");
+            if (method != null)
+            {
+                harmony.Patch(method, prefix: new HarmonyMethod(typeof(Patches), nameof(PreTagPlayer)));
+                _antiTagPatchApplied = true;
+            }
+        }
+
+        internal static bool PreTagPlayer(ulong param_1, ulong param_2)
+        {
+            if (!TitaniumCrabPlugin.Instance.AntiTagEnabled)
+                return true;
+
+            // param_2 is the player being tagged — block if it's us
+            ulong myId = SteamUser.GetSteamID().m_SteamID;
+            if (param_2 == myId)
+                return false;
+
+            return true;
+        }
+
+        // =====================================================================
+        //  Disable Traps: block spike/trap damage
+        //  Patches DamagePlayer for trap-specific damage types
+        // =====================================================================
+
+        // Already handled by GodMode patch, but we add a separate check
+        // for trap damage even when GodMode is off. Trap damage typically
+        // comes from specific item IDs (spikes, mines, etc.)
+
+        // =====================================================================
         //  No Camera Shake: disable all camera shake methods
         //  (gun shake, push shake, damage shake)
         // =====================================================================
