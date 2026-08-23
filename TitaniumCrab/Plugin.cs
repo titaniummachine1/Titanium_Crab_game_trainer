@@ -32,6 +32,12 @@ namespace TitaniumCrab
         public bool AntiEnvKillEnabled;
         public bool InfiniteAmmoEnabled;
         public bool AimbotEnabled;
+        public int AimbotMode; // 0=Always, 1=Hold, 2=Toggle
+        public int AimKey;     // keybind for hold/toggle modes
+        public bool AimbotSilent; // silent aim: don't rotate camera, only override shoot direction
+        public bool AimbotProjectile; // lead target for projectiles (snowballs)
+        public bool InfiniteSnowballs;
+        public bool NoThrowCooldown;
         public bool AutoSlapEnabled;
         public bool SuperPunchEnabled;
         public bool AntiPushEnabled;
@@ -78,8 +84,14 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgAntiEnvKill;
         internal ConfigEntry<bool> CfgInfiniteAmmo;
         internal ConfigEntry<bool> CfgAimbot;
+        internal ConfigEntry<int> CfgAimbotMode;
+        internal ConfigEntry<int> CfgAimKey;
+        internal ConfigEntry<bool> CfgAimbotSilent;
+        internal ConfigEntry<bool> CfgAimbotProjectile;
         internal ConfigEntry<float> CfgAimbotFOV;
         internal ConfigEntry<float> CfgAimbotSmooth;
+        internal ConfigEntry<bool> CfgInfiniteSnowballs;
+        internal ConfigEntry<bool> CfgNoThrowCooldown;
         internal ConfigEntry<bool> CfgAutoSlap;
         internal ConfigEntry<bool> CfgSuperPunch;
         internal ConfigEntry<float> CfgSuperPunchMultiplier;
@@ -121,8 +133,14 @@ namespace TitaniumCrab
             CfgAntiEnvKill     = Config.Bind("Combat",    "AntiEnvKill",     false, "Prevent death from environmental hazards (falling off map, water, lava)");
             CfgInfiniteAmmo    = Config.Bind("Combat",    "InfiniteAmmo",    false, "Guns never run out of ammo");
             CfgAimbot          = Config.Bind("Combat",    "Aimbot",          false, "Automatically aim at the nearest visible player");
+            CfgAimbotMode      = Config.Bind("Combat",    "AimbotMode",      1,     "0=Always on, 1=Hold key, 2=Toggle key");
+            CfgAimKey          = Config.Bind("Combat",    "AimKey",          (int)KeyCode.Mouse4, "Key to hold/toggle for aimbot (default Mouse4)");
+            CfgAimbotSilent    = Config.Bind("Combat",    "AimbotSilent",    false, "Silent aim: don't move camera, only override shoot/throw direction");
+            CfgAimbotProjectile= Config.Bind("Combat",    "AimbotProjectile",true,  "Lead target for projectiles (snowballs) — predict where target will be");
             CfgAimbotFOV       = Config.Bind("Combat",    "AimbotFOV",       30.0f, new ConfigDescription("Aimbot field-of-view (degrees)", new AcceptableValueRange<float>(1f, 180f)));
             CfgAimbotSmooth    = Config.Bind("Combat",    "AimbotSmooth",    5.0f,  new ConfigDescription("Aimbot smoothing (higher = slower)", new AcceptableValueRange<float>(1f, 30f)));
+            CfgInfiniteSnowballs = Config.Bind("Combat",  "InfiniteSnowballs", false, "Keep snowball ammo full at all times");
+            CfgNoThrowCooldown   = Config.Bind("Combat",  "NoThrowCooldown",   false, "Remove throw cooldown — machine-gun snowballs");
             CfgAutoSlap        = Config.Bind("Combat",    "AutoSlap",        false, "Machine-gun punching: no cooldown, slaps every tick");
             CfgSuperPunch      = Config.Bind("Combat",    "SuperPunch",      false, "Multiply punch knockback force");
             CfgSuperPunchMultiplier = Config.Bind("Combat", "SuperPunchMultiplier", 5.0f, new ConfigDescription("Super punch knockback multiplier", new AcceptableValueRange<float>(0f, 50f)));
@@ -150,6 +168,7 @@ namespace TitaniumCrab
 
             Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll(typeof(Patches));
+            Patches.ApplySilentAimPatches(harmony);
 
             // Disable ACTk anti-cheat detectors at startup (non-blocking approach)
             if (AntiAntiCheatEnabled)
@@ -185,8 +204,14 @@ namespace TitaniumCrab
             AntiEnvKillEnabled   = CfgAntiEnvKill.Value;
             InfiniteAmmoEnabled  = CfgInfiniteAmmo.Value;
             AimbotEnabled        = CfgAimbot.Value;
+            AimbotMode           = CfgAimbotMode.Value;
+            AimKey               = CfgAimKey.Value;
+            AimbotSilent         = CfgAimbotSilent.Value;
+            AimbotProjectile     = CfgAimbotProjectile.Value;
             AimbotFOV            = CfgAimbotFOV.Value;
             AimbotSmooth         = CfgAimbotSmooth.Value;
+            InfiniteSnowballs    = CfgInfiniteSnowballs.Value;
+            NoThrowCooldown      = CfgNoThrowCooldown.Value;
             AutoSlapEnabled      = CfgAutoSlap.Value;
             SuperPunchEnabled    = CfgSuperPunch.Value;
             SuperPunchMultiplier = CfgSuperPunchMultiplier.Value;
@@ -225,8 +250,14 @@ namespace TitaniumCrab
             CfgAntiEnvKill.Value   = AntiEnvKillEnabled;
             CfgInfiniteAmmo.Value  = InfiniteAmmoEnabled;
             CfgAimbot.Value        = AimbotEnabled;
+            CfgAimbotMode.Value    = AimbotMode;
+            CfgAimKey.Value        = AimKey;
+            CfgAimbotSilent.Value  = AimbotSilent;
+            CfgAimbotProjectile.Value = AimbotProjectile;
             CfgAimbotFOV.Value     = AimbotFOV;
             CfgAimbotSmooth.Value  = AimbotSmooth;
+            CfgInfiniteSnowballs.Value = InfiniteSnowballs;
+            CfgNoThrowCooldown.Value   = NoThrowCooldown;
             CfgAutoSlap.Value      = AutoSlapEnabled;
             CfgSuperPunch.Value    = SuperPunchEnabled;
             CfgSuperPunchMultiplier.Value = SuperPunchMultiplier;

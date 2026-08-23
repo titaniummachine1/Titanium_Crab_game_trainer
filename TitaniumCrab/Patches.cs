@@ -14,6 +14,8 @@ namespace TitaniumCrab
     /// </summary>
     internal static class Patches
     {
+        // Shared silent aim target — set by TrainerMenu.RunAimbot, read by patches
+        internal static Vector3? SilentAimTarget = null;
         // =====================================================================
         //  Anti-Anti-Cheat: disable ACTk detectors + destroy hidden GameObject
         //  Based on CodeName-Anti's AntiCheat.cs — NOT Harmony patches that
@@ -63,6 +65,66 @@ namespace TitaniumCrab
                 }
             }
             catch { /* not found yet */ }
+        }
+
+        // =====================================================================
+        //  Silent Aim: override shoot/use direction without moving camera
+        //  Patches ClientSend.ShootGun (Vector2 angles) and ClientSend.UseItem
+        //  (Vector3 direction) to redirect toward the silent aim target.
+        //  Uses string-based patching because ShootGun isn't exposed in interop.
+        // =====================================================================
+
+        internal static Harmony _silentAimHarmony;
+
+        internal static void ApplySilentAimPatches(Harmony harmony)
+        {
+            _silentAimHarmony = harmony;
+
+            // Patch ShootGun(Vector2) — gun shoot sends camera angles
+            var shootGunMethod = AccessTools.Method(typeof(ClientSend), "ShootGun");
+            if (shootGunMethod != null)
+            {
+                var prefix = new HarmonyMethod(typeof(Patches), nameof(PreShootGun));
+                harmony.Patch(shootGunMethod, prefix: prefix);
+            }
+
+            // Patch UseItem(int, Vector3) — throwable use sends direction
+            var useItemMethod = AccessTools.Method(typeof(ClientSend), "UseItem");
+            if (useItemMethod != null)
+            {
+                var prefix = new HarmonyMethod(typeof(Patches), nameof(PreUseItem));
+                harmony.Patch(useItemMethod, prefix: prefix);
+            }
+        }
+
+        internal static void PreShootGun(ref Vector2 param_1)
+        {
+            if (!SilentAimTarget.HasValue)
+                return;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return;
+
+            Vector3 target = SilentAimTarget.Value;
+            Vector3 dir = (target - cam.transform.position).normalized;
+
+            float pitch = -Mathf.Asin(dir.y) * Mathf.Rad2Deg;
+            float yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+            param_1 = new Vector2(pitch, yaw);
+        }
+
+        internal static void PreUseItem(ref Vector3 param_2)
+        {
+            if (!SilentAimTarget.HasValue)
+                return;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return;
+
+            Vector3 target = SilentAimTarget.Value;
+            param_2 = (target - cam.transform.position).normalized;
         }
 
         // =====================================================================

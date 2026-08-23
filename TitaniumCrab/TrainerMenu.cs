@@ -28,6 +28,9 @@ namespace TitaniumCrab
         // Timer for delayed anti-cheat GameObject destruction
         private float _antiCheatTimer;
 
+        // Keybind rebinding state
+        private string _waitingForKey;
+
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
 
         private void Awake()
@@ -74,6 +77,8 @@ namespace TitaniumCrab
             // execute AFTER the game applies its own movement/punch forces
             RunAutoStrafe();
             RunAutoSlap();
+            RunInfiniteSnowballs();
+            RunNoThrowCooldown();
         }
 
         private void OnGUI()
@@ -170,11 +175,17 @@ namespace TitaniumCrab
             p.NoFallEnabled        = ToggleRow("No Fall Damage", p.NoFallEnabled);
             p.AntiEnvKillEnabled   = ToggleRow("Anti Env Kill",  p.AntiEnvKillEnabled);
             p.InfiniteAmmoEnabled  = ToggleRow("Infinite Ammo",  p.InfiniteAmmoEnabled);
+            p.InfiniteSnowballs    = ToggleRow("Infinite Snowballs", p.InfiniteSnowballs);
+            p.NoThrowCooldown      = ToggleRow("No Throw Cooldown", p.NoThrowCooldown);
             p.AimbotEnabled        = ToggleRow("Aimbot",         p.AimbotEnabled);
             if (p.AimbotEnabled)
             {
-                p.AimbotFOV        = SliderRow("Aimbot FOV",     p.AimbotFOV, 1f, 180f);
-                p.AimbotSmooth     = SliderRow("Smoothing",      p.AimbotSmooth, 1f, 30f);
+                p.AimbotMode       = SliderRow("Mode (0=Always 1=Hold 2=Toggle)", p.AimbotMode, 0, 2);
+                p.AimKey           = KeyBindRow("Aim Key",      p.AimKey);
+                p.AimbotSilent     = ToggleRow("Silent Aim",    p.AimbotSilent);
+                p.AimbotProjectile = ToggleRow("Projectile Lead", p.AimbotProjectile);
+                p.AimbotFOV        = SliderRow("Aimbot FOV",    p.AimbotFOV, 1f, 180f);
+                p.AimbotSmooth     = SliderRow("Smoothing",     p.AimbotSmooth, 1f, 30f);
             }
 
             GUILayout.Space(6);
@@ -253,6 +264,38 @@ namespace TitaniumCrab
             float result = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(22));
             GUILayout.EndHorizontal();
             return result;
+        }
+
+        private int SliderRow(string label, int value, int min, int max)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"{label}: {value}", _labelStyle, GUILayout.Width(220));
+            int result = (int)GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(22));
+            GUILayout.EndHorizontal();
+            return result;
+        }
+
+        private int KeyBindRow(string label, int currentKey)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"{label}: {((KeyCode)currentKey)}", _labelStyle, GUILayout.Width(150));
+            if (GUILayout.Button("Bind", GUILayout.Width(60), GUILayout.Height(22)))
+                _waitingForKey = label;
+            if (_waitingForKey == label)
+            {
+                GUILayout.Label("Press any key...", _labelStyle);
+                foreach (KeyCode kc in System.Enum.GetValues(typeof(KeyCode)))
+                {
+                    if (Input.GetKeyDown(kc))
+                    {
+                        currentKey = (int)kc;
+                        _waitingForKey = null;
+                        break;
+                    }
+                }
+            }
+            GUILayout.EndHorizontal();
+            return currentKey;
         }
 
         // =====================================================================
@@ -338,10 +381,147 @@ namespace TitaniumCrab
             }
         }
 
+        // Aimbot toggle state (for Toggle mode)
+        private bool _aimbotToggled;
+
+        /// <summary>
+        /// Find the best target within FOV. Returns the target PlayerManager or null.
+        /// </summary>
+        private PlayerManager FindAimbotTarget(Camera cam, ulong myId, float fov)
+        {
+            PlayerManager best = null;
+            float bestAngle = fov;
+            Vector3 camPos = cam.transform.position;
+            Vector3 camFwd = cam.transform.forward;
+
+            var active = GameManager.Instance?.activePlayers;
+            if (active == null)
+                return null;
+
+            foreach (var entry in active)
+            {
+                PlayerManager pm = entry.Value;
+                if (pm == null || pm.steamProfile.m_SteamID == myId)
+                    continue;
+
+                if (pm.GetComponent<PlayerRagdoll>() != null)
+                    continue;
+
+                // Use head transform if available, otherwise estimate
+                Vector3 headPos = pm.transform.position + Vector3.up * 1.5f;
+                Vector3 dir = (headPos - camPos).normalized;
+                float angle = Vector3.Angle(camFwd, dir);
+                if (angle < bestAngle)
+                {
+                    bestAngle = angle;
+                    best = pm;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// Check if the current weapon is a projectile (snowball/throwable).
+        /// Returns the projectile speed if it is, 0 if it's a hitscan gun.
+        /// Uses reflection because currentItem/throwPrefab/snowSpeed aren't
+        /// exposed in the IL2CPP interop assembly.
+        /// </summary>
+        private float GetProjectileSpeed()
+        {
+            try
+            {
+                ItemManager im = ItemManager.Instance;
+                if (im == null)
+                    return 0f;
+
+                var currentItemField = AccessTools.Field(im.GetType(), "currentItem");
+                if (currentItemField == null)
+                    return 0f;
+
+                var currentItem = currentItemField.GetValue(im);
+                if (currentItem == null)
+                    return 0f;
+
+                var itemType = currentItem.GetType();
+
+                // Check if it has a throwPrefab (throwable item like snowball)
+                var throwPrefabField = AccessTools.Field(itemType, "throwPrefab");
+                if (throwPrefabField == null || throwPrefabField.GetValue(currentItem) == null)
+                    return 0f; // It's a gun (hitscan)
+
+                // Get snowSpeed for projectile prediction
+                var snowSpeedField = AccessTools.Field(itemType, "snowSpeed");
+                if (snowSpeedField != null)
+                    return System.Convert.ToSingle(snowSpeedField.GetValue(currentItem));
+
+                return 30f; // Default snowball speed if field not found
+            }
+            catch { return 0f; }
+        }
+
+        /// <summary>
+        /// Calculate predicted target position for projectile leading.
+        /// Estimates where the target will be when the projectile arrives.
+        /// </summary>
+        private Vector3 PredictTargetPosition(Vector3 targetPos, Vector3 targetVel, Vector3 sourcePos, float projSpeed)
+        {
+            float distance = Vector3.Distance(sourcePos, targetPos);
+            float travelTime = distance / projSpeed;
+
+            // Predict where target will be after travel time
+            return targetPos + targetVel * travelTime;
+        }
+
+        /// <summary>
+        /// Get the target's velocity for projectile leading.
+        /// </summary>
+        private Vector3 GetTargetVelocity(PlayerManager pm)
+        {
+            Rigidbody rb = pm.GetComponent<Rigidbody>();
+            if (rb != null)
+                return rb.velocity;
+
+            // Fall back to PlayerMovement's rigidbody
+            PlayerMovement move = pm.GetComponent<PlayerMovement>();
+            if (move != null)
+            {
+                Rigidbody moveRb = move.GetRb();
+                if (moveRb != null)
+                    return moveRb.velocity;
+            }
+
+            return Vector3.zero;
+        }
+
         private void RunAimbot()
         {
             var p = TitaniumCrabPlugin.Instance;
+            Patches.SilentAimTarget = null; // Clear by default
+
             if (!p.AimbotEnabled)
+                return;
+
+            // Check if aimbot should be active based on mode
+            bool shouldAim = false;
+            KeyCode aimKey = (KeyCode)p.AimKey;
+
+            switch (p.AimbotMode)
+            {
+                case 0: // Always
+                    shouldAim = true;
+                    break;
+                case 1: // Hold
+                    shouldAim = Input.GetKey(aimKey);
+                    break;
+                case 2: // Toggle
+                    if (Input.GetKeyDown(aimKey))
+                        _aimbotToggled = !_aimbotToggled;
+                    shouldAim = _aimbotToggled;
+                    break;
+            }
+
+            if (!shouldAim)
                 return;
 
             Camera cam = Camera.main;
@@ -354,38 +534,30 @@ namespace TitaniumCrab
 
             ulong myId = localPm.steamProfile.m_SteamID;
 
-            PlayerManager best = null;
-            float bestAngle = p.AimbotFOV;
-            Vector3 camPos = cam.transform.position;
-            Vector3 camFwd = cam.transform.forward;
-
-            var active = GameManager.Instance?.activePlayers;
-            if (active == null)
-                return;
-
-            foreach (var entry in active)
-            {
-                PlayerManager pm = entry.Value;
-                if (pm == null || pm.steamProfile.m_SteamID == myId)
-                    continue;
-
-                if (pm.GetComponent<PlayerRagdoll>() != null)
-                    continue;
-
-                Vector3 headPos = pm.transform.position + Vector3.up * 1.5f;
-                Vector3 dir = (headPos - camPos).normalized;
-                float angle = Vector3.Angle(camFwd, dir);
-                if (angle < bestAngle)
-                {
-                    bestAngle = angle;
-                    best = pm;
-                }
-            }
-
+            PlayerManager best = FindAimbotTarget(cam, myId, p.AimbotFOV);
             if (best == null)
                 return;
 
-            Vector3 targetDir = (best.transform.position + Vector3.up * 1.5f - camPos).normalized;
+            Vector3 camPos = cam.transform.position;
+            Vector3 targetPos = best.transform.position + Vector3.up * 1.5f;
+
+            // Projectile prediction for throwables (snowballs)
+            float projSpeed = GetProjectileSpeed();
+            if (p.AimbotProjectile && projSpeed > 0f)
+            {
+                Vector3 targetVel = GetTargetVelocity(best);
+                targetPos = PredictTargetPosition(targetPos, targetVel, camPos, projSpeed);
+            }
+
+            // Silent aim: don't rotate camera, just set the target for patches
+            if (p.AimbotSilent)
+            {
+                Patches.SilentAimTarget = targetPos;
+                return;
+            }
+
+            // Normal aimbot: rotate camera toward target
+            Vector3 targetDir = (targetPos - camPos).normalized;
             Quaternion targetRot = Quaternion.LookRotation(targetDir);
             cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, targetRot,
                 Time.deltaTime * p.AimbotSmooth);
@@ -581,6 +753,85 @@ namespace TitaniumCrab
                 // Call the Punch method directly to trigger the slap
                 punch.Punch();
             }
+        }
+
+        /// <summary>
+        /// Infinite Snowballs: keep the player's snowball ammo at max every tick.
+        /// PlayerStatus has currentAmmo and maxAmmo fields. When holding snowballs,
+        /// this refills the ammo so you never run out.
+        /// </summary>
+        private void RunInfiniteSnowballs()
+        {
+            if (!TitaniumCrabPlugin.Instance.InfiniteSnowballs)
+                return;
+
+            try
+            {
+                PlayerStatus ps = PlayerStatus.Instance;
+                if (ps == null)
+                    return;
+
+                var type = ps.GetType();
+                var curField = AccessTools.Field(type, "currentAmmo");
+                var maxField = AccessTools.Field(type, "maxAmmo");
+                if (curField == null || maxField == null)
+                    return;
+
+                int max = System.Convert.ToInt32(maxField.GetValue(ps));
+                int cur = System.Convert.ToInt32(curField.GetValue(ps));
+                if (max > 0 && cur < max)
+                    curField.SetValue(ps, max);
+            }
+            catch { /* not in game yet */ }
+        }
+
+        /// <summary>
+        /// No Throw Cooldown: reset the throw cooldown every tick so you can
+        /// machine-gun snowballs. The cooldown field is on the item component.
+        /// </summary>
+        private void RunNoThrowCooldown()
+        {
+            if (!TitaniumCrabPlugin.Instance.NoThrowCooldown)
+                return;
+
+            try
+            {
+                ItemManager im = ItemManager.Instance;
+                if (im == null)
+                    return;
+
+                // Use reflection to get currentItem
+                var currentItemField = AccessTools.Field(im.GetType(), "currentItem");
+                if (currentItemField == null)
+                    return;
+
+                var currentItem = currentItemField.GetValue(im);
+                if (currentItem == null)
+                    return;
+
+                // Check if it's a throwable (has throwPrefab)
+                var itemType = currentItem.GetType();
+                var throwPrefabField = AccessTools.Field(itemType, "throwPrefab");
+                if (throwPrefabField == null || throwPrefabField.GetValue(currentItem) == null)
+                    return; // Not a throwable
+
+                // Find ItemPrefab component on the player and reset cooldown
+                PlayerMovement pm = GetLocalPlayerMovement();
+                if (pm == null)
+                    return;
+
+                var itemPrefab = pm.GetComponentInChildren<ItemPrefab>();
+                if (itemPrefab != null)
+                {
+                    var type = itemPrefab.GetType();
+                    var cooldownField = AccessTools.Field(type, "cooldown")
+                                      ?? AccessTools.Field(type, "field_Private_Single_0")
+                                      ?? AccessTools.Field(type, "field_Private_Single_1");
+                    if (cooldownField != null)
+                        cooldownField.SetValue(itemPrefab, 0f);
+                }
+            }
+            catch { /* not in game yet */ }
         }
 
         /// <summary>
