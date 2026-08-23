@@ -54,7 +54,6 @@ namespace TitaniumCrab
             RunMegaJump();
             RunGodMode();
             RunInfiniteAmmo();
-            RunAutoSlap();
             RunAntiBoundKills();
             RunFullbright();
             RunStrongSprint();
@@ -67,6 +66,12 @@ namespace TitaniumCrab
                 if (_antiCheatTimer <= 0f && TitaniumCrabPlugin.Instance.AntiAntiCheatEnabled)
                     Patches.DestroyAntiCheatObject();
             }
+        }
+
+        private void FixedUpdate()
+        {
+            // Infinite Slap runs in FixedUpdate to sync with physics tick
+            RunAutoSlap();
         }
 
         private void OnGUI()
@@ -154,7 +159,7 @@ namespace TitaniumCrab
 
             // --- Combat ---
             SectionLabel("COMBAT");
-            p.AutoSlapEnabled      = ToggleRow("Auto Slap (MG)", p.AutoSlapEnabled);
+            p.AutoSlapEnabled      = ToggleRow("Infinite Slap",  p.AutoSlapEnabled);
             p.SuperPunchEnabled    = ToggleRow("Super Punch",    p.SuperPunchEnabled);
             if (p.SuperPunchEnabled)
                 p.SuperPunchMultiplier = SliderRow("Knockback x", p.SuperPunchMultiplier, 0f, 50f);
@@ -486,9 +491,10 @@ namespace TitaniumCrab
         }
 
         /// <summary>
-        /// Auto Slap / Infinity Punch: force the punch component to be active
-        /// and reset its cooldown every physics tick, producing machine-gun slaps.
-        /// Based on CodeName-Anti's InfinityPunchModule.
+        /// Infinite Slap: force the punch component to be active and reset its
+        /// cooldown every physics tick, producing continuous slaps with no
+        /// cooldown. Based on CodeName-Anti's InfinityPunchModule.
+        /// Runs in FixedUpdate so it syncs with the game's physics tick.
         /// </summary>
         private void RunAutoSlap()
         {
@@ -503,20 +509,11 @@ namespace TitaniumCrab
             if (punch == null)
                 return;
 
+            // Direct field access — same as CrabCheat's InfinityPunchModule
             // field_Private_Boolean_0 = is punching
             // field_Private_Single_0   = punch cooldown timer
-            // Setting the timer above the game's threshold keeps the punch
-            // firing every tick with no cooldown.
-            try
-            {
-                var punchingField = AccessTools.Field(punch.GetType(), "field_Private_Boolean_0");
-                var cooldownField = AccessTools.Field(punch.GetType(), "field_Private_Single_0");
-                if (punchingField != null)
-                    punchingField.SetValue(punch, true);
-                if (cooldownField != null)
-                    cooldownField.SetValue(punch, 3.1f);
-            }
-            catch { /* field names may differ */ }
+            punch.field_Private_Boolean_0 = true;
+            punch.field_Private_Single_0 = 3.1f;
         }
 
         /// <summary>
