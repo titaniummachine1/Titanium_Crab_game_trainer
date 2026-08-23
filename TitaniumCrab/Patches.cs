@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using SteamworksNative;
 using UnityEngine;
@@ -6,24 +9,61 @@ namespace TitaniumCrab
 {
     /// <summary>
     /// All Harmony patches for TitaniumCrab trainer features.
-    /// Per-frame logic (fly, noclip, speed, FOV, aimbot, ESP, auto-slap, etc.)
+    /// Per-frame logic (fly, noclip, speed, FOV, aimbot, auto-slap, etc.)
     /// is handled in <see cref="TrainerMenu"/>.Update.
     /// </summary>
     internal static class Patches
     {
         // =====================================================================
-        //  Anti-Anti-Cheat: bypass BepInEx / modding detection
+        //  Anti-Anti-Cheat: disable ACTk detectors + destroy hidden GameObject
+        //  Based on CodeName-Anti's AntiCheat.cs — NOT Harmony patches that
+        //  block game logic (which was preventing lobby joins).
         // =====================================================================
 
-        [HarmonyPatch(typeof(EffectManager), nameof(EffectManager.Method_Private_Void_GameObject_Boolean_Vector3_Quaternion_0))]
-        [HarmonyPrefix]
-        internal static bool PreEffectManagerDetection()
-            => !TitaniumCrabPlugin.Instance.AntiAntiCheatEnabled;
+        /// <summary>
+        /// Call all public static Stop* methods on ACTk detector types.
+        /// This disables all anti-cheat detectors without breaking game logic.
+        /// </summary>
+        internal static void StopAntiCheatDetectors()
+        {
+            try
+            {
+                Type actkType = typeof(CodeStage.AntiCheat.Common.ACTk);
+                Assembly actkAssembly = Assembly.GetAssembly(actkType);
 
-        [HarmonyPatch(typeof(LobbyManager), nameof(LobbyManager.Method_Private_Void_0))]
-        [HarmonyPrefix]
-        internal static bool PreLobbyManagerDetection()
-            => !TitaniumCrabPlugin.Instance.AntiAntiCheatEnabled;
+                foreach (Type t in actkAssembly.GetTypes().Where(t => t.IsPublic))
+                {
+                    foreach (MethodInfo method in t.GetMethods()
+                        .Where(m => m.IsStatic && m.IsPublic && m.Name.Contains("Stop")))
+                    {
+                        try { method.Invoke(null, null); }
+                        catch { /* some methods may require args */ }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                TitaniumCrabPlugin.Instance.Log.LogWarning($"StopAntiCheatDetectors failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Destroy the hidden anti-cheat GameObject that ACTk spawns.
+        /// Called after a delay so the game has time to initialize.
+        /// </summary>
+        internal static void DestroyAntiCheatObject()
+        {
+            try
+            {
+                GameObject obj = GameObject.Find("Managers/MoreSoundEffects/Sfx/Definitely just sfx here lol");
+                if (obj != null)
+                {
+                    UnityEngine.Object.Destroy(obj);
+                    TitaniumCrabPlugin.Instance.Log.LogInfo("Anti-cheat GameObject destroyed");
+                }
+            }
+            catch { /* not found yet */ }
+        }
 
         // =====================================================================
         //  God Mode + No Fall: patch PlayerStatus.DamagePlayer
@@ -114,10 +154,6 @@ namespace TitaniumCrab
                     pm.SetMaxSpeed(6.5f);
                 }
             }
-
-            // Restore frozen state after SetInput runs (so we don't permanently
-            // break game logic — the patch only needs it cleared for this call)
-            // Note: we don't restore because the game re-sets it next frame anyway.
         }
 
         // =====================================================================

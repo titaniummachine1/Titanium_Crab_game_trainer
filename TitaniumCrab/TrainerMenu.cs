@@ -25,12 +25,16 @@ namespace TitaniumCrab
         // Cached kill height for Anti-Bound-Kills
         private float _killHeight = float.NaN;
 
+        // Timer for delayed anti-cheat GameObject destruction
+        private float _antiCheatTimer;
+
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
 
         private void Awake()
         {
             _menuKey = (KeyCode)TitaniumCrabPlugin.Instance.CfgMenuKey.Value;
             _menuVisible = TitaniumCrabPlugin.Instance.MenuVisible;
+            _antiCheatTimer = 30f;
         }
 
         private void Update()
@@ -55,6 +59,14 @@ namespace TitaniumCrab
             RunFullbright();
             RunStrongSprint();
             RunSlideJump();
+
+            // Delayed anti-cheat GameObject destruction (30s after load)
+            if (_antiCheatTimer > 0f)
+            {
+                _antiCheatTimer -= Time.deltaTime;
+                if (_antiCheatTimer <= 0f && TitaniumCrabPlugin.Instance.AntiAntiCheatEnabled)
+                    Patches.DestroyAntiCheatObject();
+            }
         }
 
         private void OnGUI()

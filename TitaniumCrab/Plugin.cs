@@ -145,6 +145,13 @@ namespace TitaniumCrab
             Harmony harmony = new(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll(typeof(Patches));
 
+            // Disable ACTk anti-cheat detectors at startup (non-blocking approach)
+            if (AntiAntiCheatEnabled)
+            {
+                Patches.StopAntiCheatDetectors();
+                Log.LogInfo("Anti-cheat detectors disabled");
+            }
+
             Log.LogInfo($"TitaniumCrab {MyPluginInfo.PLUGIN_VERSION} loaded — press {((KeyCode)CfgMenuKey.Value)} to toggle the menu");
         }
 
