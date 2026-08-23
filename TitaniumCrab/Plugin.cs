@@ -25,6 +25,7 @@ namespace TitaniumCrab
         public bool AntiBoundKillsEnabled;
         public bool StrongSprintEnabled;
         public int SlideJumpKey;
+        public int ClickTpKey;
 
         // Combat
         public bool GodModeEnabled;
@@ -78,6 +79,7 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgStrongSprint;
         internal ConfigEntry<float> CfgStrongSprintMultiplier;
         internal ConfigEntry<int> CfgSlideJumpKey;
+        internal ConfigEntry<int> CfgClickTpKey;
 
         internal ConfigEntry<bool> CfgGodMode;
         internal ConfigEntry<bool> CfgNoFall;
@@ -126,6 +128,7 @@ namespace TitaniumCrab
             CfgStrongSprint    = Config.Bind("Movement",  "StrongSprint",    false, "Force sprint to stay active and multiply sprint speed");
             CfgStrongSprintMultiplier = Config.Bind("Movement", "StrongSprintMultiplier", 2.0f, new ConfigDescription("Sprint speed multiplier", new AcceptableValueRange<float>(1f, 20f)));
             CfgSlideJumpKey    = Config.Bind("Movement",  "SlideJumpKey",    (int)KeyCode.V, "Key to trigger slide-jump launch (jump + crouch simultaneously)");
+            CfgClickTpKey      = Config.Bind("Movement",  "ClickTpKey",      (int)KeyCode.T, "Key to teleport to where you're looking (raycast hit point)");
 
             // --- Combat ---
             CfgGodMode         = Config.Bind("Combat",    "GodMode",         false, "Prevent all incoming damage");
@@ -198,6 +201,7 @@ namespace TitaniumCrab
             StrongSprintEnabled  = CfgStrongSprint.Value;
             StrongSprintMultiplier = CfgStrongSprintMultiplier.Value;
             SlideJumpKey         = CfgSlideJumpKey.Value;
+            ClickTpKey           = CfgClickTpKey.Value;
 
             GodModeEnabled       = CfgGodMode.Value;
             NoFallEnabled        = CfgNoFall.Value;
@@ -244,6 +248,7 @@ namespace TitaniumCrab
             CfgStrongSprint.Value  = StrongSprintEnabled;
             CfgStrongSprintMultiplier.Value = StrongSprintMultiplier;
             CfgSlideJumpKey.Value  = SlideJumpKey;
+            CfgClickTpKey.Value    = ClickTpKey;
 
             CfgGodMode.Value       = GodModeEnabled;
             CfgNoFall.Value        = NoFallEnabled;

@@ -31,6 +31,13 @@ namespace TitaniumCrab
         // Keybind rebinding state
         private string _waitingForKey;
 
+        // Menu tab state (0=Movement, 1=Combat, 2=Visual, 3=World, 4=Misc)
+        private int _currentTab = 0;
+        private string[] _tabNames = { "Movement", "Combat", "Visual", "World", "Misc" };
+
+        // Glass/Ice destroy sub-menu state (0=none, 1=glass choosing, 2=ice choosing)
+        private int _destroySubMenu = 0;
+
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
 
         private void Awake()
@@ -61,6 +68,7 @@ namespace TitaniumCrab
             RunFullbright();
             RunStrongSprint();
             RunSlideJump();
+            RunClickTp();
 
             // Delayed anti-cheat GameObject destruction (30s after load)
             if (_antiCheatTimer > 0f)
@@ -97,7 +105,7 @@ namespace TitaniumCrab
         {
             if (_bgTexture == null)
             {
-                _bgTexture    = MakeTex(2, 2, new Color(0.08f, 0.08f, 0.12f, 0.92f));
+                _bgTexture    = MakeTex(2, 2, new Color(0.06f, 0.06f, 0.10f, 0.98f));
                 _headerTexture = MakeTex(2, 2, new Color(0.15f, 0.35f, 0.65f, 1f));
             }
 
@@ -138,10 +146,38 @@ namespace TitaniumCrab
             GUILayout.EndVertical();
 
             GUILayout.Space(4);
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(500));
 
-            // --- Movement ---
-            SectionLabel("MOVEMENT");
+            // Tab bar
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < _tabNames.Length; i++)
+            {
+                bool isActive = (_currentTab == i);
+                var oldBg = GUI.backgroundColor;
+                GUI.backgroundColor = isActive ? new Color(0.3f, 0.6f, 1f) : new Color(0.2f, 0.2f, 0.25f);
+                if (GUILayout.Button(_tabNames[i], GUILayout.Height(24)))
+                    _currentTab = i;
+                GUI.backgroundColor = oldBg;
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(440));
+
+            switch (_currentTab)
+            {
+                case 0: DrawMovementTab(p); break;
+                case 1: DrawCombatTab(p); break;
+                case 2: DrawVisualTab(p); break;
+                case 3: DrawWorldTab(p); break;
+                case 4: DrawMiscTab(p); break;
+            }
+
+            GUILayout.EndScrollView();
+            GUI.DragWindow(new Rect(0, 0, 10000, 30));
+        }
+
+        private void DrawMovementTab(TitaniumCrabPlugin p)
+        {
             p.BunnyhopEnabled      = ToggleRow("Bunnyhop",       p.BunnyhopEnabled);
             p.AutoStrafeEnabled    = ToggleRow("Auto-Strafe",    p.AutoStrafeEnabled);
             p.SpeedHackEnabled     = ToggleRow("Speed Hack",     p.SpeedHackEnabled);
@@ -160,23 +196,26 @@ namespace TitaniumCrab
             p.StrongSprintEnabled  = ToggleRow("Strong Sprint",  p.StrongSprintEnabled);
             if (p.StrongSprintEnabled)
                 p.StrongSprintMultiplier = SliderRow("Sprint x", p.StrongSprintMultiplier, 1f, 20f);
-            GUILayout.Label($"Slide Jump Key: {((KeyCode)p.SlideJumpKey)} (hold to launch)", _labelStyle);
+            p.SlideJumpKey         = KeyBindRow("Slide Jump Key",p.SlideJumpKey);
+            p.ClickTpKey           = KeyBindRow("Click TP Key",  p.ClickTpKey);
+        }
 
-            GUILayout.Space(6);
-
-            // --- Combat ---
-            SectionLabel("COMBAT");
-            p.AutoSlapEnabled      = ToggleRow("Infinite Slap",  p.AutoSlapEnabled);
-            p.SuperPunchEnabled    = ToggleRow("Super Punch",    p.SuperPunchEnabled);
-            if (p.SuperPunchEnabled)
-                p.SuperPunchMultiplier = SliderRow("Knockback x", p.SuperPunchMultiplier, 0f, 50f);
-            p.AntiPushEnabled      = ToggleRow("Anti Push",      p.AntiPushEnabled);
+        private void DrawCombatTab(TitaniumCrabPlugin p)
+        {
             p.GodModeEnabled       = ToggleRow("God Mode",       p.GodModeEnabled);
             p.NoFallEnabled        = ToggleRow("No Fall Damage", p.NoFallEnabled);
             p.AntiEnvKillEnabled   = ToggleRow("Anti Env Kill",  p.AntiEnvKillEnabled);
             p.InfiniteAmmoEnabled  = ToggleRow("Infinite Ammo",  p.InfiniteAmmoEnabled);
             p.InfiniteSnowballs    = ToggleRow("Infinite Snowballs", p.InfiniteSnowballs);
             p.NoThrowCooldown      = ToggleRow("No Throw Cooldown", p.NoThrowCooldown);
+            p.AutoSlapEnabled      = ToggleRow("Infinite Slap",  p.AutoSlapEnabled);
+            p.SuperPunchEnabled    = ToggleRow("Super Punch",    p.SuperPunchEnabled);
+            if (p.SuperPunchEnabled)
+                p.SuperPunchMultiplier = SliderRow("Knockback x", p.SuperPunchMultiplier, 0f, 50f);
+            p.AntiPushEnabled      = ToggleRow("Anti Push",      p.AntiPushEnabled);
+
+            GUILayout.Space(4);
+            SectionLabel("AIMBOT");
             p.AimbotEnabled        = ToggleRow("Aimbot",         p.AimbotEnabled);
             if (p.AimbotEnabled)
             {
@@ -187,31 +226,64 @@ namespace TitaniumCrab
                 p.AimbotFOV        = SliderRow("Aimbot FOV",    p.AimbotFOV, 1f, 180f);
                 p.AimbotSmooth     = SliderRow("Smoothing",     p.AimbotSmooth, 1f, 30f);
             }
+        }
 
-            GUILayout.Space(6);
-
-            // --- Visual ---
-            SectionLabel("VISUAL");
+        private void DrawVisualTab(TitaniumCrabPlugin p)
+        {
             p.EspEnabled           = ToggleRow("Player ESP",     p.EspEnabled);
             p.FovModifierEnabled   = ToggleRow("FOV Modifier",   p.FovModifierEnabled);
             if (p.FovModifierEnabled)
                 p.FovValue         = SliderRow("FOV",            p.FovValue, 20f, 170f);
             p.FullbrightEnabled    = ToggleRow("Fullbright",     p.FullbrightEnabled);
             p.NoCameraShakeEnabled = ToggleRow("No Camera Shake",p.NoCameraShakeEnabled);
+        }
 
-            GUILayout.Space(6);
+        private void DrawWorldTab(TitaniumCrabPlugin p)
+        {
+            if (_destroySubMenu == 1)
+            {
+                SectionLabel("DESTROY GLASS");
+                if (GUILayout.Button("All Glass", GUILayout.Height(28)))
+                {
+                    BreakAllGlass(weakOnly: false);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Weak Glass Only", GUILayout.Height(28)))
+                {
+                    BreakAllGlass(weakOnly: true);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Cancel", GUILayout.Height(24)))
+                    _destroySubMenu = 0;
+            }
+            else if (_destroySubMenu == 2)
+            {
+                SectionLabel("DESTROY ICE");
+                if (GUILayout.Button("All Ice", GUILayout.Height(28)))
+                {
+                    BreakAllIce(weakOnly: false);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Weak Ice Only", GUILayout.Height(28)))
+                {
+                    BreakAllIce(weakOnly: true);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Cancel", GUILayout.Height(24)))
+                    _destroySubMenu = 0;
+            }
+            else
+            {
+                SectionLabel("WORLD ACTIONS");
+                if (GUILayout.Button("Destroy Glass", GUILayout.Height(28)))
+                    _destroySubMenu = 1;
+                if (GUILayout.Button("Destroy Ice", GUILayout.Height(28)))
+                    _destroySubMenu = 2;
+            }
+        }
 
-            // --- World (one-shot buttons) ---
-            SectionLabel("WORLD");
-            if (GUILayout.Button("Break All Glass", GUILayout.Height(26)))
-                BreakAllGlass();
-            if (GUILayout.Button("Break All Ice", GUILayout.Height(26)))
-                BreakAllIce();
-
-            GUILayout.Space(6);
-
-            // --- Misc ---
-            SectionLabel("MISC");
+        private void DrawMiscTab(TitaniumCrabPlugin p)
+        {
             p.AntiAntiCheatEnabled = ToggleRow("Anti-AntiCheat", p.AntiAntiCheatEnabled);
 
             GUILayout.Space(8);
@@ -226,9 +298,6 @@ namespace TitaniumCrab
 
             if (GUILayout.Button("Reload from Config", GUILayout.Height(24)))
                 p.SyncFromConfig();
-
-            GUILayout.EndScrollView();
-            GUI.DragWindow(new Rect(0, 0, 10000, 30));
         }
 
         private void SectionLabel(string text)
@@ -970,6 +1039,83 @@ namespace TitaniumCrab
             rb.velocity = vel;
         }
 
+        /// <summary>
+        /// Click TP: press T to teleport to where you're looking (raycast hit).
+        /// Adjusts teleport position based on:
+        /// - Surface normal: offsets by half player height along the normal
+        ///   so you don't clip into the surface
+        /// - Pitch: if looking up (positive pitch), uses top of hitbox as pivot
+        ///   so you don't teleport above the ceiling and fall back
+        /// </summary>
+        private void RunClickTp()
+        {
+            var p = TitaniumCrabPlugin.Instance;
+            KeyCode tpKey = (KeyCode)p.ClickTpKey;
+
+            if (!Input.GetKeyDown(tpKey))
+                return;
+
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null)
+                return;
+
+            Rigidbody rb = pm.GetRb();
+            if (rb == null)
+                return;
+
+            Camera cam = Camera.main;
+            if (cam == null)
+                return;
+
+            // Raycast from camera to find hit point + normal
+            Vector3 origin = cam.transform.position;
+            Vector3 direction = cam.transform.forward;
+
+            // Use a generous max distance and hit everything
+            int layerMask = ~0; // all layers
+            if (!Physics.Raycast(origin, direction, out RaycastHit hit, 500f, layerMask))
+                return;
+
+            // Player collision box dimensions (approximate)
+            float playerHeight = 2f;  // total height
+            float playerRadius = 0.4f; // half-width
+
+            // Get the surface normal of what we hit
+            Vector3 normal = hit.normal.normalized;
+
+            // Calculate the teleport position
+            // Offset along the normal by half player height so we don't clip
+            Vector3 targetPos = hit.point + normal * (playerHeight * 0.5f);
+
+            // If looking up (positive pitch), we're likely hitting a ceiling
+            // or high wall — use the bottom of the hitbox as pivot instead
+            // so we teleport below the surface, not above it
+            float pitch = cam.transform.eulerAngles.x;
+            if (pitch > 180f) pitch -= 360f; // normalize to -180..180
+
+            if (pitch > 10f) // looking up
+            {
+                // Pivot from bottom of hitbox — teleport so our feet are at hit point
+                targetPos = hit.point + normal * 0.1f;
+                // But still offset along normal slightly to avoid clipping
+                targetPos -= Vector3.up * (playerHeight * 0.5f);
+            }
+
+            // Also offset horizontally based on normal direction
+            // If we hit a wall (normal is mostly horizontal), push us back from wall
+            if (Mathf.Abs(normal.y) < 0.5f)
+            {
+                // Wall hit — offset by player radius along normal
+                targetPos += normal * playerRadius;
+            }
+
+            // Teleport the player
+            rb.position = targetPos;
+            rb.velocity = Vector3.zero; // kill momentum to prevent glitching
+
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"ClickTP: teleported to {targetPos}");
+        }
+
         // =====================================================================
         //  World actions (one-shot buttons)
         // =====================================================================
@@ -978,7 +1124,7 @@ namespace TitaniumCrab
         /// Break all glass panes on Glass Jump maps.
         /// Based on CodeName-Anti's GlassBreakerModule.
         /// </summary>
-        private void BreakAllGlass()
+        private void BreakAllGlass(bool weakOnly = false)
         {
             GlassManager gm = GlassManager.Instance;
             if (gm == null)
@@ -999,6 +1145,19 @@ namespace TitaniumCrab
                 if (glass.gameObject.name.Contains("Solid"))
                     continue;
 
+                // Weak only: skip panes that are solid/fake (wouldn't break if walked on)
+                if (weakOnly)
+                {
+                    // Check solidPiece field — if true, it's a solid/fake pane
+                    var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
+                    if (solidField != null)
+                    {
+                        bool isSolid = System.Convert.ToBoolean(solidField.GetValue(glass));
+                        if (isSolid)
+                            continue;
+                    }
+                }
+
                 try
                 {
                     glass.LocalInteract();
@@ -1008,22 +1167,18 @@ namespace TitaniumCrab
                 catch { /* skip broken entries */ }
             }
 
-            TitaniumCrabPlugin.Instance.Log.LogInfo($"BreakAllGlass: broke {count} panes");
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"BreakAllGlass({(weakOnly ? "weak" : "all")}): broke {count} panes");
         }
 
         /// <summary>
         /// Break all ice tiles on Falling Platforms / ice maps.
         /// Finds all Tile components and triggers their break/interact method.
         /// </summary>
-        private void BreakAllIce()
+        private void BreakAllIce(bool weakOnly = false)
         {
-            // Ice tiles in Crab Game are typically "Tile" components that have
-            // a break/fall interaction. We find all tiles and trigger them.
-            // The Tile type has LocalInteract/AllInteract similar to GlassBreak.
             int count = 0;
             ulong myId = SteamUser.GetSteamID().m_SteamID;
 
-            // Find all objects with "Tile" in their name that have an interact method
             var tiles = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
             foreach (var mb in tiles)
             {
@@ -1031,10 +1186,20 @@ namespace TitaniumCrab
                     continue;
 
                 string typeName = mb.GetIl2CppType().Name;
-                // Tile components are typically named with "Tile" or are part of
-                // the PiecesManager system. We check for interact methods.
                 if (!typeName.Contains("Tile") && !typeName.Contains("Piece"))
                     continue;
+
+                // Weak only: skip solid tiles (wouldn't break if walked on)
+                if (weakOnly)
+                {
+                    var solidField = AccessTools.Field(mb.GetType(), "solidPiece");
+                    if (solidField != null)
+                    {
+                        bool isSolid = System.Convert.ToBoolean(solidField.GetValue(mb));
+                        if (isSolid)
+                            continue;
+                    }
+                }
 
                 try
                 {
@@ -1051,7 +1216,7 @@ namespace TitaniumCrab
                 catch { /* skip non-interactable tiles */ }
             }
 
-            TitaniumCrabPlugin.Instance.Log.LogInfo($"BreakAllIce: broke {count} tiles");
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"BreakAllIce({(weakOnly ? "weak" : "all")}): broke {count} tiles");
         }
 
         // =====================================================================
