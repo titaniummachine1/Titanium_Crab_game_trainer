@@ -664,85 +664,46 @@ namespace TitaniumCrab
             string kbText = GetKeybindText(label);
             string displayText = $"{label}{kbText}  [{(value ? "ON" : "OFF")}]";
 
-            // Draw the button and get its rect
             var oldColor = GUI.color;
             GUI.color = value ? new Color(0.3f, 0.9f, 0.3f) : new Color(0.9f, 0.4f, 0.4f);
-            Rect rect = GUILayoutUtility.GetRect(new GUIContent(displayText), GUI.skin.button, GUILayout.Height(24));
+            bool clicked = GUILayout.Button(displayText, GUILayout.Height(24));
             GUI.color = oldColor;
 
-            // Draw the button manually so we control which click does what
-            bool wasHover = rect.Contains(Event.current.mousePosition);
-            if (wasHover)
-                GUI.color = value ? new Color(0.2f, 0.7f, 0.2f) : new Color(0.7f, 0.3f, 0.3f);
-            else
-                GUI.color = value ? new Color(0.3f, 0.9f, 0.3f) : new Color(0.9f, 0.4f, 0.4f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0f, GUI.color, 0f, 0f);
-            GUI.color = Color.white;
-            GUI.Label(rect, displayText, new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12,
-                normal = { textColor = Color.white }
-            });
-
-            // Process events
             var evt = Event.current;
-            if (evt != null && rect.Contains(evt.mousePosition))
+            if (clicked && evt != null)
             {
-                if (evt.type == EventType.MouseDown && evt.button == 1)
+                if (evt.button == 1)
                 {
-                    // Right-click → open keybind popup
+                    // Right-click → open keybind popup, don't toggle
                     _pendingKeybindFeature = label;
                     _waitingForKeyPress = false;
-                    evt.Use();
+                    return value; // unchanged
                 }
-                else if (evt.type == EventType.MouseDown && evt.button == 0)
-                {
-                    // Left-click → toggle
-                    value = !value;
-                    evt.Use();
-                }
+                // Left-click → toggle
+                return !value;
             }
-
             return value;
         }
 
         private bool ButtonRow(string label)
         {
             string kbText = GetKeybindText(label);
-            string displayText = $"{label}{kbText}";
+            bool clicked = GUILayout.Button($"{label}{kbText}", GUILayout.Height(26));
 
-            Rect rect = GUILayoutUtility.GetRect(new GUIContent(displayText), GUI.skin.button, GUILayout.Height(26));
-
-            bool wasHover = rect.Contains(Event.current.mousePosition);
-            GUI.color = wasHover ? new Color(0.35f, 0.4f, 0.55f) : new Color(0.25f, 0.28f, 0.4f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0f, GUI.color, 0f, 0f);
-            GUI.color = Color.white;
-            GUI.Label(rect, displayText, new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12,
-                normal = { textColor = Color.white }
-            });
-
-            bool clicked = false;
             var evt = Event.current;
-            if (evt != null && rect.Contains(evt.mousePosition))
+            if (clicked && evt != null)
             {
-                if (evt.type == EventType.MouseDown && evt.button == 1)
+                if (evt.button == 1)
                 {
+                    // Right-click → open keybind popup, don't trigger action
                     _pendingKeybindFeature = label;
                     _waitingForKeyPress = false;
-                    evt.Use();
+                    return false;
                 }
-                else if (evt.type == EventType.MouseDown && evt.button == 0)
-                {
-                    clicked = true;
-                    evt.Use();
-                }
+                // Left-click → trigger action
+                return true;
             }
-
-            return clicked;
+            return false;
         }
 
         private float SliderRow(string label, float value, float min, float max)
