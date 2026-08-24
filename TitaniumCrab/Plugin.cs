@@ -40,6 +40,8 @@ namespace TitaniumCrab
         // Misc extras
         public bool ChatSpammerEnabled;
         public string ChatSpammerText = "TitaniumCrab!";
+        public bool AutoCompleteQuests;
+        public bool AutoClaimQuests;
 
         // Combat
         public bool GodModeEnabled;
@@ -100,6 +102,8 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgAntiTag;
         internal ConfigEntry<bool> CfgChatSpammer;
         internal ConfigEntry<string> CfgChatSpammerText;
+        internal ConfigEntry<bool> CfgAutoCompleteQuests;
+        internal ConfigEntry<bool> CfgAutoClaimQuests;
 
         internal ConfigEntry<bool> CfgGodMode;
         internal ConfigEntry<bool> CfgNoFall;
@@ -156,6 +160,8 @@ namespace TitaniumCrab
             CfgAntiTag         = Config.Bind("Combat",    "AntiTag",         false, "Prevent players from tagging/stealing crown from you (experimental)");
             CfgChatSpammer     = Config.Bind("Misc",      "ChatSpammer",     false, "Auto-spam chat messages");
             CfgChatSpammerText = Config.Bind("Misc",      "ChatSpammerText", "TitaniumCrab!", "Text to spam in chat");
+            CfgAutoCompleteQuests = Config.Bind("Misc",   "AutoCompleteQuests", false, "Auto-complete daily quests every frame");
+            CfgAutoClaimQuests    = Config.Bind("Misc",   "AutoClaimQuests",    false, "Auto-claim quest rewards every frame");
 
             // --- Combat ---
             CfgGodMode         = Config.Bind("Combat",    "GodMode",         false, "Prevent all incoming damage");
@@ -239,6 +245,8 @@ namespace TitaniumCrab
             AntiTagEnabled       = CfgAntiTag.Value;
             ChatSpammerEnabled   = CfgChatSpammer.Value;
             ChatSpammerText      = CfgChatSpammerText.Value;
+            AutoCompleteQuests   = CfgAutoCompleteQuests.Value;
+            AutoClaimQuests      = CfgAutoClaimQuests.Value;
 
             GodModeEnabled       = CfgGodMode.Value;
             NoFallEnabled        = CfgNoFall.Value;
@@ -292,6 +300,8 @@ namespace TitaniumCrab
             CfgAntiTag.Value       = AntiTagEnabled;
             CfgChatSpammer.Value   = ChatSpammerEnabled;
             CfgChatSpammerText.Value = ChatSpammerText;
+            CfgAutoCompleteQuests.Value = AutoCompleteQuests;
+            CfgAutoClaimQuests.Value = AutoClaimQuests;
 
             CfgGodMode.Value       = GodModeEnabled;
             CfgNoFall.Value        = NoFallEnabled;

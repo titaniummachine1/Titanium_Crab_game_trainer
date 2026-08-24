@@ -97,6 +97,7 @@ namespace TitaniumCrab
             RunPermaSlide();
             RunRapidfire();
             RunChatSpammer();
+            RunAutoQuests();
 
             // Delayed anti-cheat GameObject destruction (30s after load)
             if (_antiCheatTimer > 0f)
@@ -409,6 +410,15 @@ namespace TitaniumCrab
                 GUILayout.EndHorizontal();
             }
 
+            GUILayout.Space(4);
+            SectionLabel("QUESTS (right-click for keybind)");
+            p.AutoCompleteQuests   = ToggleRow("Auto Complete Quests", p.AutoCompleteQuests);
+            p.AutoClaimQuests      = ToggleRow("Auto Claim Quests",    p.AutoClaimQuests);
+            if (ButtonRow("Complete Quests"))
+                DoCompleteQuests();
+            if (ButtonRow("Claim Quest Rewards"))
+                DoClaimQuests();
+
             GUILayout.Space(8);
 
             if (GUILayout.Button("Save Settings to Config", GUILayout.Height(28)))
@@ -443,7 +453,8 @@ namespace TitaniumCrab
         private static readonly HashSet<string> ActionFeatures = new()
         {
             "Click TP", "Save Position", "Restore Position", "Slide Jump",
-            "Destroy Glass", "Destroy Ice"
+            "Destroy Glass", "Destroy Ice",
+            "Complete Quests", "Claim Quest Rewards"
         };
 
         private bool IsActionFeature(string feature) => ActionFeatures.Contains(feature);
@@ -597,6 +608,8 @@ namespace TitaniumCrab
                 case "No Camera Shake":   p.NoCameraShakeEnabled = value; break;
                 case "Anti-AntiCheat":    p.AntiAntiCheatEnabled = value; break;
                 case "Chat Spammer":      p.ChatSpammerEnabled = value; break;
+                case "Auto Complete Quests": p.AutoCompleteQuests = value; break;
+                case "Auto Claim Quests": p.AutoClaimQuests = value; break;
             }
         }
 
@@ -609,6 +622,8 @@ namespace TitaniumCrab
                 case "Restore Position":  DoRestorePos(); break;
                 case "Destroy Glass":     BreakAllGlass(false); break;
                 case "Destroy Ice":       BreakAllIce(false); break;
+                case "Complete Quests":   DoCompleteQuests(); break;
+                case "Claim Quest Rewards": DoClaimQuests(); break;
             }
         }
 
@@ -621,44 +636,84 @@ namespace TitaniumCrab
             string kbText = GetKeybindText(label);
             string displayText = $"{label}{kbText}  [{(value ? "ON" : "OFF")}]";
 
+            // Draw the button and get its rect
             var oldColor = GUI.color;
             GUI.color = value ? new Color(0.3f, 0.9f, 0.3f) : new Color(0.9f, 0.4f, 0.4f);
-            bool clicked = GUILayout.Button(displayText, GUILayout.Height(24));
+            Rect rect = GUILayoutUtility.GetRect(new GUIContent(displayText), GUI.skin.button, GUILayout.Height(24));
             GUI.color = oldColor;
 
-            // Right-click detection — only check during ContextClick, use cached rect
-            var evt = Event.current;
-            if (evt != null && evt.type == EventType.ContextClick)
+            // Draw the button manually so we control which click does what
+            bool wasHover = rect.Contains(Event.current.mousePosition);
+            if (wasHover)
+                GUI.color = value ? new Color(0.2f, 0.7f, 0.2f) : new Color(0.7f, 0.3f, 0.3f);
+            else
+                GUI.color = value ? new Color(0.3f, 0.9f, 0.3f) : new Color(0.9f, 0.4f, 0.4f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0f, GUI.color, 0f, 0f);
+            GUI.color = Color.white;
+            GUI.Label(rect, displayText, new GUIStyle(GUI.skin.label)
             {
-                Rect rect = GUILayoutUtility.GetLastRect();
-                if (rect.Contains(evt.mousePosition))
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 12,
+                normal = { textColor = Color.white }
+            });
+
+            // Process events
+            var evt = Event.current;
+            if (evt != null && rect.Contains(evt.mousePosition))
+            {
+                if (evt.type == EventType.MouseDown && evt.button == 1)
                 {
+                    // Right-click → open keybind popup
                     _pendingKeybindFeature = label;
                     _waitingForKeyPress = false;
                     evt.Use();
                 }
+                else if (evt.type == EventType.MouseDown && evt.button == 0)
+                {
+                    // Left-click → toggle
+                    value = !value;
+                    evt.Use();
+                }
             }
 
-            // Click toggles the value
-            return clicked ? !value : value;
+            return value;
         }
 
         private bool ButtonRow(string label)
         {
             string kbText = GetKeybindText(label);
-            bool clicked = GUILayout.Button($"{label}{kbText}", GUILayout.Height(26));
+            string displayText = $"{label}{kbText}";
 
-            var evt = Event.current;
-            if (evt != null && evt.type == EventType.ContextClick)
+            Rect rect = GUILayoutUtility.GetRect(new GUIContent(displayText), GUI.skin.button, GUILayout.Height(26));
+
+            bool wasHover = rect.Contains(Event.current.mousePosition);
+            GUI.color = wasHover ? new Color(0.35f, 0.4f, 0.55f) : new Color(0.25f, 0.28f, 0.4f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0f, GUI.color, 0f, 0f);
+            GUI.color = Color.white;
+            GUI.Label(rect, displayText, new GUIStyle(GUI.skin.label)
             {
-                Rect rect = GUILayoutUtility.GetLastRect();
-                if (rect.Contains(evt.mousePosition))
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 12,
+                normal = { textColor = Color.white }
+            });
+
+            bool clicked = false;
+            var evt = Event.current;
+            if (evt != null && rect.Contains(evt.mousePosition))
+            {
+                if (evt.type == EventType.MouseDown && evt.button == 1)
                 {
                     _pendingKeybindFeature = label;
                     _waitingForKeyPress = false;
                     evt.Use();
                 }
+                else if (evt.type == EventType.MouseDown && evt.button == 0)
+                {
+                    clicked = true;
+                    evt.Use();
+                }
             }
+
             return clicked;
         }
 
@@ -1527,6 +1582,84 @@ namespace TitaniumCrab
                     sendMethod.Invoke(null, new object[] { TitaniumCrabPlugin.Instance.ChatSpammerText });
             }
             catch { /* not in game or chat not available */ }
+        }
+
+        /// <summary>
+        /// Auto Quests: auto-complete and auto-claim daily quests.
+        /// Uses reflection to call CompleteQuest and ClaimQuestReward on SaveManager.
+        /// </summary>
+        private void RunAutoQuests()
+        {
+            var p = TitaniumCrabPlugin.Instance;
+            if (!p.AutoCompleteQuests && !p.AutoClaimQuests)
+                return;
+
+            try
+            {
+                // Find the SaveManager singleton via reflection
+                var smType = AccessTools.TypeByName("MonoBehaviourPublicObInVoAwVoVoVoVoVoVoUnique");
+                if (smType == null) return;
+
+                var instanceProp = AccessTools.Property(smType, "Instance");
+                if (instanceProp == null) return;
+
+                var sm = instanceProp.GetValue(null);
+                if (sm == null) return;
+
+                if (p.AutoCompleteQuests)
+                {
+                    var completeMethod = AccessTools.Method(smType, "CompleteQuest");
+                    completeMethod?.Invoke(sm, null);
+                }
+
+                if (p.AutoClaimQuests)
+                {
+                    var claimMethod = AccessTools.Method(smType, "ClaimQuestReward");
+                    claimMethod?.Invoke(sm, null);
+
+                    var tryClaimMethod = AccessTools.Method(smType, "TryClaimReward");
+                    tryClaimMethod?.Invoke(sm, null);
+                }
+            }
+            catch { /* not in main menu or quests not available */ }
+        }
+
+        /// <summary>One-shot: complete all daily quests.</summary>
+        private void DoCompleteQuests()
+        {
+            try
+            {
+                var smType = AccessTools.TypeByName("MonoBehaviourPublicObInVoAwVoVoVoVoVoVoUnique");
+                if (smType == null) return;
+                var instanceProp = AccessTools.Property(smType, "Instance");
+                if (instanceProp == null) return;
+                var sm = instanceProp.GetValue(null);
+                if (sm == null) return;
+                var completeMethod = AccessTools.Method(smType, "CompleteQuest");
+                completeMethod?.Invoke(sm, null);
+                TitaniumCrabPlugin.Instance.Log.LogInfo("Quests completed");
+            }
+            catch { }
+        }
+
+        /// <summary>One-shot: claim all quest rewards.</summary>
+        private void DoClaimQuests()
+        {
+            try
+            {
+                var smType = AccessTools.TypeByName("MonoBehaviourPublicObInVoAwVoVoVoVoVoVoUnique");
+                if (smType == null) return;
+                var instanceProp = AccessTools.Property(smType, "Instance");
+                if (instanceProp == null) return;
+                var sm = instanceProp.GetValue(null);
+                if (sm == null) return;
+                var claimMethod = AccessTools.Method(smType, "ClaimQuestReward");
+                claimMethod?.Invoke(sm, null);
+                var tryClaimMethod = AccessTools.Method(smType, "TryClaimReward");
+                tryClaimMethod?.Invoke(sm, null);
+                TitaniumCrabPlugin.Instance.Log.LogInfo("Quest rewards claimed");
+            }
+            catch { }
         }
 
         // =====================================================================
