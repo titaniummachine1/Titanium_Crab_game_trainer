@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace TitaniumCrab
 {
-    internal enum KeybindMode : byte { None = 0, Always = 1, Hold = 2, Toggle = 3, Release = 4 }
+    internal enum KeybindMode : byte { None = 0, Always = 1, Hold = 2, Toggle = 3, Release = 4, Impulse = 5 }
 
     internal class KeybindEntry
     {
@@ -184,6 +184,11 @@ namespace TitaniumCrab
                 if (GUILayout.Button("On Release", GUILayout.Height(24)))
                 {
                     _pendingKeybindMode = KeybindMode.Release;
+                    _waitingForKeyPress = true;
+                }
+                if (GUILayout.Button("Impulse (once per press)", GUILayout.Height(24)))
+                {
+                    _pendingKeybindMode = KeybindMode.Impulse;
                     _waitingForKeyPress = true;
                 }
                 if (GUILayout.Button("Remove Keybind", GUILayout.Height(24)))
@@ -510,9 +515,16 @@ namespace TitaniumCrab
 
                 if (entry.IsAction)
                 {
-                    bool trigger = entry.Mode == KeybindMode.Release
-                        ? Input.GetKeyUp(entry.Key)
-                        : Input.GetKeyDown(entry.Key);
+                    bool trigger;
+                    switch (entry.Mode)
+                    {
+                        case KeybindMode.Always:   trigger = true; break;
+                        case KeybindMode.Hold:     trigger = Input.GetKey(entry.Key); break;
+                        case KeybindMode.Release:  trigger = Input.GetKeyUp(entry.Key); break;
+                        case KeybindMode.Toggle:   trigger = Input.GetKeyDown(entry.Key); break;
+                        case KeybindMode.Impulse:  trigger = Input.GetKeyDown(entry.Key); break;
+                        default:                   trigger = false; break;
+                    }
                     if (trigger)
                         TriggerAction(entry.Feature);
                     continue;
@@ -535,6 +547,10 @@ namespace TitaniumCrab
                         if (Input.GetKeyUp(entry.Key))
                             entry.ToggleState = !entry.ToggleState;
                         ApplyFeature(entry.Feature, entry.ToggleState);
+                        break;
+                    case KeybindMode.Impulse:
+                        // On for one frame on key down, off otherwise
+                        ApplyFeature(entry.Feature, Input.GetKeyDown(entry.Key));
                         break;
                 }
             }
