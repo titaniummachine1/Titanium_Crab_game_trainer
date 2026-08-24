@@ -60,6 +60,14 @@ namespace TitaniumCrab
         // Chat spammer timer
         private float _chatSpamTimer;
 
+        // Cached light list for Fullbright (refreshed every 5s, not every frame)
+        private List<Light> _cachedLights = new();
+        private float _lightCacheTimer;
+
+        // Cached colliders for Noclip (refreshed only when toggled on)
+        private List<Collider> _noclipColliders = new();
+        private bool _noclipCollidersCached;
+
         public TrainerMenu(System.IntPtr ptr) : base(ptr) { }
 
         private void Awake()
@@ -358,15 +366,25 @@ namespace TitaniumCrab
         {
             if (_destroySubMenu == 1)
             {
-                SectionLabel("DESTROY GLASS");
-                if (GUILayout.Button("All Glass", GUILayout.Height(28)))
+                SectionLabel("GLASS CONTROLS");
+                if (GUILayout.Button("Break All Glass", GUILayout.Height(28)))
                 {
                     BreakAllGlass(weakOnly: false);
                     _destroySubMenu = 0;
                 }
-                if (GUILayout.Button("Weak Glass Only", GUILayout.Height(28)))
+                if (GUILayout.Button("Break Weak Glass Only", GUILayout.Height(28)))
                 {
                     BreakAllGlass(weakOnly: true);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Make All Glass Weak", GUILayout.Height(28)))
+                {
+                    SetAllGlassSolid(false);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Make All Glass Strong", GUILayout.Height(28)))
+                {
+                    SetAllGlassSolid(true);
                     _destroySubMenu = 0;
                 }
                 if (GUILayout.Button("Cancel", GUILayout.Height(24)))
@@ -374,15 +392,25 @@ namespace TitaniumCrab
             }
             else if (_destroySubMenu == 2)
             {
-                SectionLabel("DESTROY ICE");
-                if (GUILayout.Button("All Ice", GUILayout.Height(28)))
+                SectionLabel("ICE CONTROLS");
+                if (GUILayout.Button("Break All Ice", GUILayout.Height(28)))
                 {
                     BreakAllIce(weakOnly: false);
                     _destroySubMenu = 0;
                 }
-                if (GUILayout.Button("Weak Ice Only", GUILayout.Height(28)))
+                if (GUILayout.Button("Break Weak Ice Only", GUILayout.Height(28)))
                 {
                     BreakAllIce(weakOnly: true);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Make All Ice Weak", GUILayout.Height(28)))
+                {
+                    SetAllIceSolid(false);
+                    _destroySubMenu = 0;
+                }
+                if (GUILayout.Button("Make All Ice Strong", GUILayout.Height(28)))
+                {
+                    SetAllIceSolid(true);
                     _destroySubMenu = 0;
                 }
                 if (GUILayout.Button("Cancel", GUILayout.Height(24)))
@@ -391,9 +419,9 @@ namespace TitaniumCrab
             else
             {
                 SectionLabel("WORLD ACTIONS (right-click for keybind)");
-                if (ButtonRow("Destroy Glass"))
+                if (ButtonRow("Glass Controls"))
                     _destroySubMenu = 1;
-                if (ButtonRow("Destroy Ice"))
+                if (ButtonRow("Ice Controls"))
                     _destroySubMenu = 2;
             }
         }
@@ -764,14 +792,23 @@ namespace TitaniumCrab
         private void RunNoclip()
         {
             if (!TitaniumCrabPlugin.Instance.NoclipEnabled)
+            {
+                _noclipCollidersCached = false;
                 return;
+            }
 
-            PlayerMovement pm = GetLocalPlayerMovement();
-            if (pm == null)
-                return;
+            if (!_noclipCollidersCached)
+            {
+                PlayerMovement pm = GetLocalPlayerMovement();
+                if (pm == null)
+                    return;
+                _noclipColliders.Clear();
+                _noclipColliders.AddRange(pm.GetComponentsInChildren<Collider>());
+                _noclipCollidersCached = true;
+            }
 
-            foreach (Collider c in pm.GetComponentsInChildren<Collider>())
-                c.enabled = false;
+            foreach (Collider c in _noclipColliders)
+                if (c != null) c.enabled = false;
         }
 
         private void RunFovModifier()
@@ -1287,10 +1324,22 @@ namespace TitaniumCrab
             if (!TitaniumCrabPlugin.Instance.FullbrightEnabled)
                 return;
 
-            foreach (Light light in UnityEngine.Object.FindObjectsOfType<Light>())
+            // Cache lights every 5 seconds instead of every frame
+            _lightCacheTimer -= Time.deltaTime;
+            if (_lightCacheTimer <= 0f)
             {
-                light.intensity = 3f;
-                light.range = 100f;
+                _lightCacheTimer = 5f;
+                _cachedLights.Clear();
+                _cachedLights.AddRange(UnityEngine.Object.FindObjectsOfType<Light>());
+            }
+
+            foreach (Light light in _cachedLights)
+            {
+                if (light != null)
+                {
+                    light.intensity = 3f;
+                    light.range = 100f;
+                }
             }
         }
 
@@ -1687,21 +1736,20 @@ namespace TitaniumCrab
                 if (glass == null)
                     continue;
 
-                // Skip solid (non-breakable) panes — they show the correct path
-                if (glass.gameObject.name.Contains("Solid"))
-                    continue;
-
-                // Weak only: skip panes that are solid/fake (wouldn't break if walked on)
-                if (weakOnly)
+                // ALWAYS check solidPiece field — solid panes are safe to walk on
+                // The name check alone is unreliable (not all solid panes have "Solid" in name)
+                var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
+                if (solidField != null)
                 {
-                    // Check solidPiece field — if true, it's a solid/fake pane
-                    var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
-                    if (solidField != null)
-                    {
-                        bool isSolid = System.Convert.ToBoolean(solidField.GetValue(glass));
-                        if (isSolid)
-                            continue;
-                    }
+                    bool isSolid = System.Convert.ToBoolean(solidField.GetValue(glass));
+                    if (isSolid)
+                        continue;
+                }
+                else
+                {
+                    // Fallback: name check if solidPiece field not found
+                    if (glass.gameObject.name.Contains("Solid"))
+                        continue;
                 }
 
                 try
@@ -1717,49 +1765,146 @@ namespace TitaniumCrab
         }
 
         /// <summary>
+        /// Set all glass panes to solid (strong) or non-solid (weak).
+        /// As host, this lets you control which panes are breakable.
+        /// </summary>
+        private void SetAllGlassSolid(bool solid)
+        {
+            GlassManager gm = GlassManager.Instance;
+            if (gm == null)
+            {
+                TitaniumCrabPlugin.Instance.Log.LogWarning("SetAllGlassSolid: no GlassManager found");
+                return;
+            }
+
+            int count = 0;
+            foreach (GlassBreak glass in gm.pieces)
+            {
+                if (glass == null) continue;
+                var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
+                if (solidField != null)
+                {
+                    solidField.SetValue(glass, solid);
+                    count++;
+                }
+            }
+
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"SetAllGlassSolid({(solid ? "strong" : "weak")}): {count} panes");
+        }
+
+        /// <summary>
+        /// Set all ice tiles to solid (strong) or non-solid (weak).
+        /// Uses GlassManager.pieces (ice tiles share the same system).
+        /// </summary>
+        private void SetAllIceSolid(bool solid)
+        {
+            // Ice tiles use the same GlassManager system
+            GlassManager gm = GlassManager.Instance;
+            if (gm != null && gm.pieces != null)
+            {
+                int count = 0;
+                foreach (GlassBreak glass in gm.pieces)
+                {
+                    if (glass == null) continue;
+                    var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
+                    if (solidField != null)
+                    {
+                        solidField.SetValue(glass, solid);
+                        count++;
+                    }
+                }
+                TitaniumCrabPlugin.Instance.Log.LogInfo($"SetAllIceSolid({(solid ? "strong" : "weak")}): {count} tiles");
+                return;
+            }
+
+            // Fallback: search for Tile-typed MonoBehaviours
+            int count2 = 0;
+            var allMb = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
+            foreach (var mb in allMb)
+            {
+                if (mb == null) continue;
+                string typeName = mb.GetIl2CppType().Name;
+                if (!typeName.Contains("Tile") && !typeName.Contains("Piece"))
+                    continue;
+                var solidField = AccessTools.Field(mb.GetType(), "solidPiece");
+                if (solidField != null)
+                {
+                    solidField.SetValue(mb, solid);
+                    count2++;
+                }
+            }
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"SetAllIceSolid({(solid ? "strong" : "weak")}): {count2} tiles (fallback)");
+        }
+
+        /// <summary>
         /// Break all ice tiles on Falling Platforms / ice maps.
-        /// Finds all Tile components and triggers their break/interact method.
+        /// Uses FindObjectsOfType<Tile> instead of FindObjectsOfType<MonoBehaviour>
+        /// (the latter scans every MonoBehaviour in the scene = massive lag).
+        /// Falls back to GlassManager.pieces if Tile type not available.
         /// </summary>
         private void BreakAllIce(bool weakOnly = false)
         {
             int count = 0;
             ulong myId = SteamUser.GetSteamID().m_SteamID;
 
-            var tiles = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
-            foreach (var mb in tiles)
+            // Try GlassManager first (ice tiles are often GlassBreak pieces)
+            GlassManager gm = GlassManager.Instance;
+            if (gm != null && gm.pieces != null)
             {
-                if (mb == null)
-                    continue;
-
-                string typeName = mb.GetIl2CppType().Name;
-                if (!typeName.Contains("Tile") && !typeName.Contains("Piece"))
-                    continue;
-
-                // Weak only: skip solid tiles (wouldn't break if walked on)
-                if (weakOnly)
+                foreach (GlassBreak glass in gm.pieces)
                 {
+                    if (glass == null) continue;
+
+                    // Always check solidPiece — solid tiles are safe to walk on
+                    var solidField = AccessTools.Field(glass.GetType(), "solidPiece");
+                    if (solidField != null)
+                    {
+                        bool isSolid = System.Convert.ToBoolean(solidField.GetValue(glass));
+                        if (isSolid) continue;
+                    }
+
+                    try
+                    {
+                        glass.LocalInteract();
+                        glass.AllInteract(myId);
+                        count++;
+                    }
+                    catch { }
+                }
+            }
+            else
+            {
+                // Fallback: search for Tile-typed MonoBehaviours
+                // This is still expensive but only runs on button press, not every frame
+                var allMb = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
+                foreach (var mb in allMb)
+                {
+                    if (mb == null) continue;
+                    string typeName = mb.GetIl2CppType().Name;
+                    if (!typeName.Contains("Tile") && !typeName.Contains("Piece"))
+                        continue;
+
                     var solidField = AccessTools.Field(mb.GetType(), "solidPiece");
                     if (solidField != null)
                     {
                         bool isSolid = System.Convert.ToBoolean(solidField.GetValue(mb));
-                        if (isSolid)
-                            continue;
+                        if (isSolid) continue;
                     }
-                }
 
-                try
-                {
-                    var localInteract = AccessTools.Method(mb.GetType(), "LocalInteract");
-                    var allInteract   = AccessTools.Method(mb.GetType(), "AllInteract");
-                    if (localInteract != null)
+                    try
                     {
-                        localInteract.Invoke(mb, null);
-                        count++;
+                        var localInteract = AccessTools.Method(mb.GetType(), "LocalInteract");
+                        var allInteract = AccessTools.Method(mb.GetType(), "AllInteract");
+                        if (localInteract != null)
+                        {
+                            localInteract.Invoke(mb, null);
+                            count++;
+                        }
+                        if (allInteract != null)
+                            allInteract.Invoke(mb, new object[] { myId });
                     }
-                    if (allInteract != null)
-                        allInteract.Invoke(mb, new object[] { myId });
+                    catch { }
                 }
-                catch { /* skip non-interactable tiles */ }
             }
 
             TitaniumCrabPlugin.Instance.Log.LogInfo($"BreakAllIce({(weakOnly ? "weak" : "all")}): broke {count} tiles");
@@ -1820,6 +1965,22 @@ namespace TitaniumCrab
     /// </summary>
     internal static class EspRenderer
     {
+        private static GUIStyle _boxStyle;
+        private static GUIStyle _shadowStyle;
+
+        private static void EnsureStyles()
+        {
+            if (_boxStyle == null)
+            {
+                _boxStyle = new GUIStyle(GUI.skin.box)
+                {
+                    normal = { textColor = Color.green },
+                    fontSize = 11
+                };
+                _shadowStyle = new GUIStyle(_boxStyle) { normal = { textColor = Color.black } };
+            }
+        }
+
         internal static void Draw()
         {
             Camera cam = Camera.main;
@@ -1833,11 +1994,7 @@ namespace TitaniumCrab
             if (active == null)
                 return;
 
-            GUIStyle boxStyle = new(GUI.skin.box)
-            {
-                normal = { textColor = Color.green },
-                fontSize = 11
-            };
+            EnsureStyles();
 
             foreach (var entry in active)
             {
@@ -1866,12 +2023,11 @@ namespace TitaniumCrab
 
                 string label = $"[{distance:F0}m]";
                 var content = new GUIContent(label);
-                Vector2 size = boxStyle.CalcSize(content);
+                Vector2 size = _boxStyle.CalcSize(content);
                 Rect labelRect = new(screenPos.x - size.x / 2f, screenY - boxH / 2f - size.y - 2f, size.x, size.y);
 
-                var shadowStyle = new GUIStyle(boxStyle) { normal = { textColor = Color.black } };
-                GUI.Label(new Rect(labelRect.x + 1, labelRect.y + 1, labelRect.width, labelRect.height), label, shadowStyle);
-                GUI.Label(labelRect, label, boxStyle);
+                GUI.Label(new Rect(labelRect.x + 1, labelRect.y + 1, labelRect.width, labelRect.height), label, _shadowStyle);
+                GUI.Label(labelRect, label, _boxStyle);
             }
         }
 
