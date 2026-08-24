@@ -23,7 +23,7 @@ namespace TitaniumCrab
     /// </summary>
     public class TrainerMenu : MonoBehaviour
     {
-        private Rect _menuRect = new(20f, 20f, 340f, 580f);
+        private Rect _menuRect = new(20f, 20f, 380f, 620f);
         private bool _menuVisible = true;
         private KeyCode _menuKey = KeyCode.Insert;
 
@@ -45,7 +45,7 @@ namespace TitaniumCrab
         private string _pendingKeybindFeature;
         private KeybindMode _pendingKeybindMode;
         private bool _waitingForKeyPress;
-        private Rect _keybindPopupRect = new(350, 100, 220, 180);
+        private Rect _keybindPopupRect = new(410, 100, 240, 220);
 
         // Menu tab state (0=Movement, 1=Combat, 2=Visual, 3=World, 4=Misc)
         private int _currentTab = 0;
@@ -263,7 +263,7 @@ namespace TitaniumCrab
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4);
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(440));
+            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(480));
 
             switch (_currentTab)
             {
@@ -619,20 +619,28 @@ namespace TitaniumCrab
         private bool ToggleRow(string label, bool value)
         {
             string kbText = GetKeybindText(label);
+            string displayText = $"{label}{kbText}  [{(value ? "ON" : "OFF")}]";
+
             var oldColor = GUI.color;
-            GUI.color = value ? Color.green : new Color(1f, 0.4f, 0.4f);
-            bool newValue = GUILayout.Toggle(value, $"{label}{kbText}{(value ? "  ON" : "  OFF")}",
-                "button", GUILayout.Height(22));
+            GUI.color = value ? new Color(0.3f, 0.9f, 0.3f) : new Color(0.9f, 0.4f, 0.4f);
+            bool clicked = GUILayout.Button(displayText, GUILayout.Height(24));
             GUI.color = oldColor;
 
-            Rect rect = GUILayoutUtility.GetLastRect();
-            if (Event.current != null && Event.current.type == EventType.ContextClick && rect.Contains(Event.current.mousePosition))
+            // Right-click detection — only check during ContextClick, use cached rect
+            var evt = Event.current;
+            if (evt != null && evt.type == EventType.ContextClick)
             {
-                _pendingKeybindFeature = label;
-                _waitingForKeyPress = false;
-                Event.current.Use();
+                Rect rect = GUILayoutUtility.GetLastRect();
+                if (rect.Contains(evt.mousePosition))
+                {
+                    _pendingKeybindFeature = label;
+                    _waitingForKeyPress = false;
+                    evt.Use();
+                }
             }
-            return newValue;
+
+            // Click toggles the value
+            return clicked ? !value : value;
         }
 
         private bool ButtonRow(string label)
@@ -640,12 +648,16 @@ namespace TitaniumCrab
             string kbText = GetKeybindText(label);
             bool clicked = GUILayout.Button($"{label}{kbText}", GUILayout.Height(26));
 
-            Rect rect = GUILayoutUtility.GetLastRect();
-            if (Event.current != null && Event.current.type == EventType.ContextClick && rect.Contains(Event.current.mousePosition))
+            var evt = Event.current;
+            if (evt != null && evt.type == EventType.ContextClick)
             {
-                _pendingKeybindFeature = label;
-                _waitingForKeyPress = false;
-                Event.current.Use();
+                Rect rect = GUILayoutUtility.GetLastRect();
+                if (rect.Contains(evt.mousePosition))
+                {
+                    _pendingKeybindFeature = label;
+                    _waitingForKeyPress = false;
+                    evt.Use();
+                }
             }
             return clicked;
         }
