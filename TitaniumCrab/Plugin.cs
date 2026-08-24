@@ -24,15 +24,12 @@ namespace TitaniumCrab
         public bool NoFreezeEnabled;
         public bool AntiBoundKillsEnabled;
         public bool StrongSprintEnabled;
-        public int SlideJumpKey;
-        public int ClickTpKey;
+        public bool SlideJumpEnabled;
 
         // Movement extras
         public bool GravityToggleEnabled;
         public bool PermaSlideEnabled;
         public bool BlinkEnabled;
-        public int SavePosKey;
-        public int RestorePosKey;
 
         // Combat extras
         public bool NoRecoilEnabled;
@@ -50,8 +47,6 @@ namespace TitaniumCrab
         public bool AntiEnvKillEnabled;
         public bool InfiniteAmmoEnabled;
         public bool AimbotEnabled;
-        public int AimbotMode; // 0=Always, 1=Hold, 2=Toggle
-        public int AimKey;     // keybind for hold/toggle modes
         public bool AimbotSilent; // silent aim: don't rotate camera, only override shoot direction
         public bool AimbotProjectile; // lead target for projectiles (snowballs)
         public bool InfiniteSnowballs;
@@ -95,13 +90,10 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgAntiBoundKills;
         internal ConfigEntry<bool> CfgStrongSprint;
         internal ConfigEntry<float> CfgStrongSprintMultiplier;
-        internal ConfigEntry<int> CfgSlideJumpKey;
-        internal ConfigEntry<int> CfgClickTpKey;
+        internal ConfigEntry<bool> CfgSlideJumpEnabled;
         internal ConfigEntry<bool> CfgGravityToggle;
         internal ConfigEntry<bool> CfgPermaSlide;
         internal ConfigEntry<bool> CfgBlink;
-        internal ConfigEntry<int> CfgSavePosKey;
-        internal ConfigEntry<int> CfgRestorePosKey;
         internal ConfigEntry<bool> CfgNoRecoil;
         internal ConfigEntry<bool> CfgRapidfire;
         internal ConfigEntry<bool> CfgDisableTraps;
@@ -114,8 +106,6 @@ namespace TitaniumCrab
         internal ConfigEntry<bool> CfgAntiEnvKill;
         internal ConfigEntry<bool> CfgInfiniteAmmo;
         internal ConfigEntry<bool> CfgAimbot;
-        internal ConfigEntry<int> CfgAimbotMode;
-        internal ConfigEntry<int> CfgAimKey;
         internal ConfigEntry<bool> CfgAimbotSilent;
         internal ConfigEntry<bool> CfgAimbotProjectile;
         internal ConfigEntry<float> CfgAimbotFOV;
@@ -135,6 +125,7 @@ namespace TitaniumCrab
 
         internal ConfigEntry<bool> CfgAntiAntiCheat;
         internal ConfigEntry<int> CfgMenuKey;
+        internal ConfigEntry<string> CfgKeybinds;
 
         public override void Load()
         {
@@ -155,13 +146,10 @@ namespace TitaniumCrab
             CfgAntiBoundKills  = Config.Bind("Movement",  "AntiBoundKills",  false, "Float above out-of-bounds kill zones (water, lava, etc.)");
             CfgStrongSprint    = Config.Bind("Movement",  "StrongSprint",    false, "Force sprint to stay active and multiply sprint speed");
             CfgStrongSprintMultiplier = Config.Bind("Movement", "StrongSprintMultiplier", 2.0f, new ConfigDescription("Sprint speed multiplier", new AcceptableValueRange<float>(1f, 20f)));
-            CfgSlideJumpKey    = Config.Bind("Movement",  "SlideJumpKey",    (int)KeyCode.V, "Key to trigger slide-jump launch (jump + crouch simultaneously)");
-            CfgClickTpKey      = Config.Bind("Movement",  "ClickTpKey",      (int)KeyCode.T, "Key to teleport to where you're looking (raycast hit point)");
+            CfgSlideJumpEnabled = Config.Bind("Movement",  "SlideJump",       false, "Hold to slide-jump launch (assign keybind via right-click)");
             CfgGravityToggle   = Config.Bind("Movement",  "GravityToggle",   false, "Remove gravity (float in place)");
             CfgPermaSlide      = Config.Bind("Movement",  "PermaSlide",      false, "Slide permanently without needing speed");
             CfgBlink           = Config.Bind("Movement",  "Blink",           false, "Freeze position updates to server — other players don't see you move");
-            CfgSavePosKey      = Config.Bind("Movement",  "SavePosKey",      (int)KeyCode.F5, "Key to save current position");
-            CfgRestorePosKey   = Config.Bind("Movement",  "RestorePosKey",   (int)KeyCode.F6, "Key to teleport to saved position");
             CfgNoRecoil        = Config.Bind("Combat",    "NoRecoil",        false, "Remove gun recoil when shooting");
             CfgRapidfire       = Config.Bind("Combat",    "Rapidfire",       false, "Auto-fire guns while holding M1");
             CfgDisableTraps    = Config.Bind("Combat",    "DisableTraps",    false, "Immune to spikes, mines, and all map traps (experimental)");
@@ -175,8 +163,6 @@ namespace TitaniumCrab
             CfgAntiEnvKill     = Config.Bind("Combat",    "AntiEnvKill",     false, "Prevent death from environmental hazards (falling off map, water, lava)");
             CfgInfiniteAmmo    = Config.Bind("Combat",    "InfiniteAmmo",    false, "Guns never run out of ammo");
             CfgAimbot          = Config.Bind("Combat",    "Aimbot",          false, "Automatically aim at the nearest visible player");
-            CfgAimbotMode      = Config.Bind("Combat",    "AimbotMode",      1,     "0=Always on, 1=Hold key, 2=Toggle key");
-            CfgAimKey          = Config.Bind("Combat",    "AimKey",          (int)KeyCode.Mouse4, "Key to hold/toggle for aimbot (default Mouse4)");
             CfgAimbotSilent    = Config.Bind("Combat",    "AimbotSilent",    false, "Silent aim: don't move camera, only override shoot/throw direction");
             CfgAimbotProjectile= Config.Bind("Combat",    "AimbotProjectile",true,  "Lead target for projectiles (snowballs) — predict where target will be");
             CfgAimbotFOV       = Config.Bind("Combat",    "AimbotFOV",       30.0f, new ConfigDescription("Aimbot field-of-view (degrees)", new AcceptableValueRange<float>(1f, 180f)));
@@ -198,6 +184,7 @@ namespace TitaniumCrab
             // --- Misc ---
             CfgAntiAntiCheat   = Config.Bind("Misc",      "AntiAntiCheat",   true,  "Bypass BepInEx / modding detection (recommended)");
             CfgMenuKey         = Config.Bind("Misc",      "MenuKey",         (int)KeyCode.Insert, "Key to toggle the trainer menu");
+            CfgKeybinds        = Config.Bind("Keybinds",  "Bindings",        "", "All keybind assignments (auto-managed by right-click in menu)");
 
             SyncFromConfig();
 
@@ -242,13 +229,10 @@ namespace TitaniumCrab
             AntiBoundKillsEnabled= CfgAntiBoundKills.Value;
             StrongSprintEnabled  = CfgStrongSprint.Value;
             StrongSprintMultiplier = CfgStrongSprintMultiplier.Value;
-            SlideJumpKey         = CfgSlideJumpKey.Value;
-            ClickTpKey           = CfgClickTpKey.Value;
+            SlideJumpEnabled     = CfgSlideJumpEnabled.Value;
             GravityToggleEnabled = CfgGravityToggle.Value;
             PermaSlideEnabled    = CfgPermaSlide.Value;
             BlinkEnabled         = CfgBlink.Value;
-            SavePosKey           = CfgSavePosKey.Value;
-            RestorePosKey        = CfgRestorePosKey.Value;
             NoRecoilEnabled      = CfgNoRecoil.Value;
             RapidfireEnabled     = CfgRapidfire.Value;
             DisableTrapsEnabled  = CfgDisableTraps.Value;
@@ -261,8 +245,6 @@ namespace TitaniumCrab
             AntiEnvKillEnabled   = CfgAntiEnvKill.Value;
             InfiniteAmmoEnabled  = CfgInfiniteAmmo.Value;
             AimbotEnabled        = CfgAimbot.Value;
-            AimbotMode           = CfgAimbotMode.Value;
-            AimKey               = CfgAimKey.Value;
             AimbotSilent         = CfgAimbotSilent.Value;
             AimbotProjectile     = CfgAimbotProjectile.Value;
             AimbotFOV            = CfgAimbotFOV.Value;
@@ -300,13 +282,10 @@ namespace TitaniumCrab
             CfgAntiBoundKills.Value= AntiBoundKillsEnabled;
             CfgStrongSprint.Value  = StrongSprintEnabled;
             CfgStrongSprintMultiplier.Value = StrongSprintMultiplier;
-            CfgSlideJumpKey.Value  = SlideJumpKey;
-            CfgClickTpKey.Value    = ClickTpKey;
+            CfgSlideJumpEnabled.Value = SlideJumpEnabled;
             CfgGravityToggle.Value = GravityToggleEnabled;
             CfgPermaSlide.Value    = PermaSlideEnabled;
             CfgBlink.Value         = BlinkEnabled;
-            CfgSavePosKey.Value    = SavePosKey;
-            CfgRestorePosKey.Value = RestorePosKey;
             CfgNoRecoil.Value      = NoRecoilEnabled;
             CfgRapidfire.Value     = RapidfireEnabled;
             CfgDisableTraps.Value  = DisableTrapsEnabled;
@@ -319,8 +298,6 @@ namespace TitaniumCrab
             CfgAntiEnvKill.Value   = AntiEnvKillEnabled;
             CfgInfiniteAmmo.Value  = InfiniteAmmoEnabled;
             CfgAimbot.Value        = AimbotEnabled;
-            CfgAimbotMode.Value    = AimbotMode;
-            CfgAimKey.Value        = AimKey;
             CfgAimbotSilent.Value  = AimbotSilent;
             CfgAimbotProjectile.Value = AimbotProjectile;
             CfgAimbotFOV.Value     = AimbotFOV;

@@ -1,10 +1,22 @@
 using HarmonyLib;
 using SteamworksNative;
+using System.Collections.Generic;
 using UnityEngine;
 
 
 namespace TitaniumCrab
 {
+    internal enum KeybindMode : byte { None = 0, Always = 1, Hold = 2, Toggle = 3, Release = 4 }
+
+    internal class KeybindEntry
+    {
+        public string Feature;
+        public KeyCode Key;
+        public KeybindMode Mode;
+        public bool ToggleState;
+        public bool IsAction;
+    }
+
     /// <summary>
     /// MonoBehaviour registered into Il2Cpp that renders an IMGUI trainer overlay
     /// and runs per-frame feature logic (fly, noclip, FOV, ESP, aimbot, auto-slap, etc.).
@@ -28,8 +40,12 @@ namespace TitaniumCrab
         // Timer for delayed anti-cheat GameObject destruction
         private float _antiCheatTimer;
 
-        // Keybind rebinding state
-        private string _waitingForKey;
+        // Keybind system
+        private Dictionary<string, KeybindEntry> _keybinds = new();
+        private string _pendingKeybindFeature;
+        private KeybindMode _pendingKeybindMode;
+        private bool _waitingForKeyPress;
+        private Rect _keybindPopupRect = new(350, 100, 220, 180);
 
         // Menu tab state (0=Movement, 1=Combat, 2=Visual, 3=World, 4=Misc)
         private int _currentTab = 0;
@@ -51,6 +67,7 @@ namespace TitaniumCrab
             _menuKey = (KeyCode)TitaniumCrabPlugin.Instance.CfgMenuKey.Value;
             _menuVisible = TitaniumCrabPlugin.Instance.MenuVisible;
             _antiCheatTimer = 30f;
+            LoadKeybinds();
         }
 
         private void Update()
@@ -60,6 +77,8 @@ namespace TitaniumCrab
                 _menuVisible = !_menuVisible;
                 TitaniumCrabPlugin.Instance.MenuVisible = _menuVisible;
             }
+
+            ProcessKeybinds();
 
             RunFly();
             RunNoclip();
@@ -74,10 +93,8 @@ namespace TitaniumCrab
             RunFullbright();
             RunStrongSprint();
             RunSlideJump();
-            RunClickTp();
             RunGravityToggle();
             RunPermaSlide();
-            RunSaveRestorePos();
             RunRapidfire();
             RunChatSpammer();
 
@@ -110,6 +127,75 @@ namespace TitaniumCrab
 
             InitStyles();
             _menuRect = GUI.Window(9991, _menuRect, (GUI.WindowFunction)DrawMenuWindow, "");
+
+            if (_pendingKeybindFeature != null)
+                _keybindPopupRect = GUI.Window(9992, _keybindPopupRect, (GUI.WindowFunction)DrawKeybindPopup, "");
+        }
+
+        private void DrawKeybindPopup(int id)
+        {
+            GUILayout.Label($"Keybind for:", _labelStyle);
+            GUILayout.Label(_pendingKeybindFeature, new GUIStyle(GUI.skin.label)
+            {
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(0.4f, 0.6f, 0.9f) }
+            });
+            GUILayout.Space(4);
+
+            if (_waitingForKeyPress)
+            {
+                GUILayout.Label("Press any key...", _labelStyle);
+                GUILayout.Label("(ESC to cancel)", _labelStyle);
+
+                foreach (KeyCode kc in System.Enum.GetValues(typeof(KeyCode)))
+                {
+                    if (Input.GetKeyDown(kc))
+                    {
+                        if (kc == KeyCode.Escape)
+                        {
+                            _pendingKeybindFeature = null;
+                            _waitingForKeyPress = false;
+                            return;
+                        }
+                        SetKeybind(_pendingKeybindFeature, kc, _pendingKeybindMode);
+                        _pendingKeybindFeature = null;
+                        _waitingForKeyPress = false;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                if (GUILayout.Button("Always On", GUILayout.Height(24)))
+                {
+                    SetKeybind(_pendingKeybindFeature, KeyCode.None, KeybindMode.Always);
+                    _pendingKeybindFeature = null;
+                }
+                if (GUILayout.Button("Hold", GUILayout.Height(24)))
+                {
+                    _pendingKeybindMode = KeybindMode.Hold;
+                    _waitingForKeyPress = true;
+                }
+                if (GUILayout.Button("Toggle", GUILayout.Height(24)))
+                {
+                    _pendingKeybindMode = KeybindMode.Toggle;
+                    _waitingForKeyPress = true;
+                }
+                if (GUILayout.Button("On Release", GUILayout.Height(24)))
+                {
+                    _pendingKeybindMode = KeybindMode.Release;
+                    _waitingForKeyPress = true;
+                }
+                if (GUILayout.Button("Remove Keybind", GUILayout.Height(24)))
+                {
+                    SetKeybind(_pendingKeybindFeature, KeyCode.None, KeybindMode.None);
+                    _pendingKeybindFeature = null;
+                }
+                if (GUILayout.Button("Cancel", GUILayout.Height(24)))
+                    _pendingKeybindFeature = null;
+            }
+
+            GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }
 
         private void InitStyles()
@@ -207,13 +293,19 @@ namespace TitaniumCrab
             p.StrongSprintEnabled  = ToggleRow("Strong Sprint",  p.StrongSprintEnabled);
             if (p.StrongSprintEnabled)
                 p.StrongSprintMultiplier = SliderRow("Sprint x", p.StrongSprintMultiplier, 1f, 20f);
-            p.SlideJumpKey         = KeyBindRow("Slide Jump Key",p.SlideJumpKey);
-            p.ClickTpKey           = KeyBindRow("Click TP Key",  p.ClickTpKey);
+            p.SlideJumpEnabled     = ToggleRow("Slide Jump",     p.SlideJumpEnabled);
             p.GravityToggleEnabled = ToggleRow("Gravity Toggle", p.GravityToggleEnabled);
             p.PermaSlideEnabled    = ToggleRow("Perma Slide",    p.PermaSlideEnabled);
             p.BlinkEnabled         = ToggleRow("Blink",          p.BlinkEnabled);
-            p.SavePosKey           = KeyBindRow("Save Pos Key",  p.SavePosKey);
-            p.RestorePosKey        = KeyBindRow("Restore Pos Key",p.RestorePosKey);
+
+            GUILayout.Space(4);
+            SectionLabel("ACTIONS (right-click for keybind)");
+            if (ButtonRow("Click TP"))
+                DoClickTp();
+            if (ButtonRow("Save Position"))
+                DoSavePos();
+            if (ButtonRow("Restore Position"))
+                DoRestorePos();
         }
 
         private void DrawCombatTab(TitaniumCrabPlugin p)
@@ -235,12 +327,10 @@ namespace TitaniumCrab
             p.AntiTagEnabled       = ToggleRow("Anti Tag",       p.AntiTagEnabled);
 
             GUILayout.Space(4);
-            SectionLabel("AIMBOT");
+            SectionLabel("AIMBOT (right-click for keybind)");
             p.AimbotEnabled        = ToggleRow("Aimbot",         p.AimbotEnabled);
             if (p.AimbotEnabled)
             {
-                p.AimbotMode       = SliderRow("Mode (0=Always 1=Hold 2=Toggle)", p.AimbotMode, 0, 2);
-                p.AimKey           = KeyBindRow("Aim Key",      p.AimKey);
                 p.AimbotSilent     = ToggleRow("Silent Aim",    p.AimbotSilent);
                 p.AimbotProjectile = ToggleRow("Projectile Lead", p.AimbotProjectile);
                 p.AimbotFOV        = SliderRow("Aimbot FOV",    p.AimbotFOV, 1f, 180f);
@@ -294,10 +384,10 @@ namespace TitaniumCrab
             }
             else
             {
-                SectionLabel("WORLD ACTIONS");
-                if (GUILayout.Button("Destroy Glass", GUILayout.Height(28)))
+                SectionLabel("WORLD ACTIONS (right-click for keybind)");
+                if (ButtonRow("Destroy Glass"))
                     _destroySubMenu = 1;
-                if (GUILayout.Button("Destroy Ice", GUILayout.Height(28)))
+                if (ButtonRow("Destroy Ice"))
                     _destroySubMenu = 2;
             }
         }
@@ -341,17 +431,207 @@ namespace TitaniumCrab
             GUILayout.Space(1);
         }
 
+        // =====================================================================
+        //  Keybind system — right-click any toggle/button to assign a keybind
+        // =====================================================================
+
+        private static readonly HashSet<string> ActionFeatures = new()
+        {
+            "Click TP", "Save Position", "Restore Position", "Slide Jump",
+            "Destroy Glass", "Destroy Ice"
+        };
+
+        private bool IsActionFeature(string feature) => ActionFeatures.Contains(feature);
+
+        private void LoadKeybinds()
+        {
+            _keybinds.Clear();
+            string raw = TitaniumCrabPlugin.Instance.CfgKeybinds?.Value;
+            if (string.IsNullOrEmpty(raw))
+                return;
+
+            foreach (string part in raw.Split(';'))
+            {
+                string[] tokens = part.Split(':');
+                if (tokens.Length < 3) continue;
+                if (!byte.TryParse(tokens[1], out byte modeByte)) continue;
+                if (!int.TryParse(tokens[2], out int keyCode)) continue;
+
+                string feature = tokens[0];
+                _keybinds[feature] = new KeybindEntry
+                {
+                    Feature = feature,
+                    Mode = (KeybindMode)modeByte,
+                    Key = (KeyCode)keyCode,
+                    IsAction = IsActionFeature(feature)
+                };
+            }
+        }
+
+        private void SaveKeybinds()
+        {
+            var parts = new List<string>();
+            foreach (var entry in _keybinds.Values)
+            {
+                if (entry.Mode != KeybindMode.None)
+                    parts.Add($"{entry.Feature}:{(int)entry.Mode}:{(int)entry.Key}");
+            }
+            TitaniumCrabPlugin.Instance.CfgKeybinds.Value = string.Join(";", parts);
+        }
+
+        private void SetKeybind(string feature, KeyCode key, KeybindMode mode)
+        {
+            if (!_keybinds.ContainsKey(feature))
+                _keybinds[feature] = new KeybindEntry { Feature = feature };
+            var entry = _keybinds[feature];
+            entry.Key = key;
+            entry.Mode = mode;
+            entry.ToggleState = false;
+            entry.IsAction = IsActionFeature(feature);
+            SaveKeybinds();
+        }
+
+        private string GetKeybindText(string feature)
+        {
+            if (_keybinds.TryGetValue(feature, out var kb) && kb.Mode != KeybindMode.None)
+            {
+                if (kb.Mode == KeybindMode.Always)
+                    return " [Always]";
+                return $" [{kb.Mode}: {kb.Key}]";
+            }
+            return "";
+        }
+
+        private void ProcessKeybinds()
+        {
+            foreach (var entry in _keybinds.Values)
+            {
+                if (entry.Mode == KeybindMode.None) continue;
+
+                if (entry.IsAction)
+                {
+                    bool trigger = entry.Mode == KeybindMode.Release
+                        ? Input.GetKeyUp(entry.Key)
+                        : Input.GetKeyDown(entry.Key);
+                    if (trigger)
+                        TriggerAction(entry.Feature);
+                    continue;
+                }
+
+                switch (entry.Mode)
+                {
+                    case KeybindMode.Always:
+                        ApplyFeature(entry.Feature, true);
+                        break;
+                    case KeybindMode.Hold:
+                        ApplyFeature(entry.Feature, Input.GetKey(entry.Key));
+                        break;
+                    case KeybindMode.Toggle:
+                        if (Input.GetKeyDown(entry.Key))
+                            entry.ToggleState = !entry.ToggleState;
+                        ApplyFeature(entry.Feature, entry.ToggleState);
+                        break;
+                    case KeybindMode.Release:
+                        if (Input.GetKeyUp(entry.Key))
+                            entry.ToggleState = !entry.ToggleState;
+                        ApplyFeature(entry.Feature, entry.ToggleState);
+                        break;
+                }
+            }
+        }
+
+        private void ApplyFeature(string feature, bool value)
+        {
+            var p = TitaniumCrabPlugin.Instance;
+            switch (feature)
+            {
+                case "Bunnyhop":          p.BunnyhopEnabled = value; break;
+                case "Auto-Strafe":       p.AutoStrafeEnabled = value; break;
+                case "Speed Hack":        p.SpeedHackEnabled = value; break;
+                case "Fly Mode":          p.FlyEnabled = value; break;
+                case "No-Clip":           p.NoclipEnabled = value; break;
+                case "Air Jump":          p.AirJumpEnabled = value; break;
+                case "Mega Jump":         p.MegaJumpEnabled = value; break;
+                case "No Freeze":         p.NoFreezeEnabled = value; break;
+                case "Anti-Bound Kills":  p.AntiBoundKillsEnabled = value; break;
+                case "Strong Sprint":     p.StrongSprintEnabled = value; break;
+                case "Slide Jump":        p.SlideJumpEnabled = value; break;
+                case "Gravity Toggle":    p.GravityToggleEnabled = value; break;
+                case "Perma Slide":       p.PermaSlideEnabled = value; break;
+                case "Blink":             p.BlinkEnabled = value; break;
+                case "God Mode":          p.GodModeEnabled = value; break;
+                case "No Fall Damage":    p.NoFallEnabled = value; break;
+                case "Anti Env Kill":     p.AntiEnvKillEnabled = value; break;
+                case "Infinite Ammo":     p.InfiniteAmmoEnabled = value; break;
+                case "Infinite Snowballs":p.InfiniteSnowballs = value; break;
+                case "No Throw Cooldown": p.NoThrowCooldown = value; break;
+                case "Infinite Slap":     p.AutoSlapEnabled = value; break;
+                case "Super Punch":       p.SuperPunchEnabled = value; break;
+                case "Anti Push":         p.AntiPushEnabled = value; break;
+                case "No Recoil":         p.NoRecoilEnabled = value; break;
+                case "Rapidfire":         p.RapidfireEnabled = value; break;
+                case "Disable Traps":     p.DisableTrapsEnabled = value; break;
+                case "Anti Tag":          p.AntiTagEnabled = value; break;
+                case "Aimbot":            p.AimbotEnabled = value; break;
+                case "Silent Aim":        p.AimbotSilent = value; break;
+                case "Projectile Lead":   p.AimbotProjectile = value; break;
+                case "Player ESP":        p.EspEnabled = value; break;
+                case "FOV Modifier":      p.FovModifierEnabled = value; break;
+                case "Fullbright":        p.FullbrightEnabled = value; break;
+                case "No Camera Shake":   p.NoCameraShakeEnabled = value; break;
+                case "Anti-AntiCheat":    p.AntiAntiCheatEnabled = value; break;
+                case "Chat Spammer":      p.ChatSpammerEnabled = value; break;
+            }
+        }
+
+        private void TriggerAction(string feature)
+        {
+            switch (feature)
+            {
+                case "Click TP":          DoClickTp(); break;
+                case "Save Position":     DoSavePos(); break;
+                case "Restore Position":  DoRestorePos(); break;
+                case "Destroy Glass":     BreakAllGlass(false); break;
+                case "Destroy Ice":       BreakAllIce(false); break;
+            }
+        }
+
+        // =====================================================================
+        //  UI helpers — ToggleRow and ButtonRow with right-click keybind
+        // =====================================================================
+
         private bool ToggleRow(string label, bool value)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(label, _labelStyle, GUILayout.Width(150));
+            string kbText = GetKeybindText(label);
             var oldColor = GUI.color;
             GUI.color = value ? Color.green : new Color(1f, 0.4f, 0.4f);
-            bool newValue = GUILayout.Toggle(value, value ? " ON" : " OFF",
+            bool newValue = GUILayout.Toggle(value, $"{label}{kbText}{(value ? "  ON" : "  OFF")}",
                 "button", GUILayout.Height(22));
             GUI.color = oldColor;
-            GUILayout.EndHorizontal();
+
+            Rect rect = GUILayoutUtility.GetLastRect();
+            if (Event.current != null && Event.current.type == EventType.ContextClick && rect.Contains(Event.current.mousePosition))
+            {
+                _pendingKeybindFeature = label;
+                _waitingForKeyPress = false;
+                Event.current.Use();
+            }
             return newValue;
+        }
+
+        private bool ButtonRow(string label)
+        {
+            string kbText = GetKeybindText(label);
+            bool clicked = GUILayout.Button($"{label}{kbText}", GUILayout.Height(26));
+
+            Rect rect = GUILayoutUtility.GetLastRect();
+            if (Event.current != null && Event.current.type == EventType.ContextClick && rect.Contains(Event.current.mousePosition))
+            {
+                _pendingKeybindFeature = label;
+                _waitingForKeyPress = false;
+                Event.current.Use();
+            }
+            return clicked;
         }
 
         private float SliderRow(string label, float value, float min, float max)
@@ -361,38 +641,6 @@ namespace TitaniumCrab
             float result = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(22));
             GUILayout.EndHorizontal();
             return result;
-        }
-
-        private int SliderRow(string label, int value, int min, int max)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"{label}: {value}", _labelStyle, GUILayout.Width(220));
-            int result = (int)GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(22));
-            GUILayout.EndHorizontal();
-            return result;
-        }
-
-        private int KeyBindRow(string label, int currentKey)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"{label}: {((KeyCode)currentKey)}", _labelStyle, GUILayout.Width(150));
-            if (GUILayout.Button("Bind", GUILayout.Width(60), GUILayout.Height(22)))
-                _waitingForKey = label;
-            if (_waitingForKey == label)
-            {
-                GUILayout.Label("Press any key...", _labelStyle);
-                foreach (KeyCode kc in System.Enum.GetValues(typeof(KeyCode)))
-                {
-                    if (Input.GetKeyDown(kc))
-                    {
-                        currentKey = (int)kc;
-                        _waitingForKey = null;
-                        break;
-                    }
-                }
-            }
-            GUILayout.EndHorizontal();
-            return currentKey;
         }
 
         // =====================================================================
@@ -477,9 +725,6 @@ namespace TitaniumCrab
                 rb.velocity = new Vector3(dir.x * targetMag, vel.y, dir.z * targetMag);
             }
         }
-
-        // Aimbot toggle state (for Toggle mode)
-        private bool _aimbotToggled;
 
         /// <summary>
         /// Find the best target within FOV. Returns the target PlayerManager or null.
@@ -596,29 +841,8 @@ namespace TitaniumCrab
             var p = TitaniumCrabPlugin.Instance;
             Patches.SilentAimTarget = null; // Clear by default
 
+            // AimbotEnabled is controlled by the keybind system or manual toggle
             if (!p.AimbotEnabled)
-                return;
-
-            // Check if aimbot should be active based on mode
-            bool shouldAim = false;
-            KeyCode aimKey = (KeyCode)p.AimKey;
-
-            switch (p.AimbotMode)
-            {
-                case 0: // Always
-                    shouldAim = true;
-                    break;
-                case 1: // Hold
-                    shouldAim = Input.GetKey(aimKey);
-                    break;
-                case 2: // Toggle
-                    if (Input.GetKeyDown(aimKey))
-                        _aimbotToggled = !_aimbotToggled;
-                    shouldAim = _aimbotToggled;
-                    break;
-            }
-
-            if (!shouldAim)
                 return;
 
             Camera cam = Camera.main;
@@ -1022,10 +1246,7 @@ namespace TitaniumCrab
         /// </summary>
         private void RunSlideJump()
         {
-            var p = TitaniumCrabPlugin.Instance;
-            var slideKey = (KeyCode)p.SlideJumpKey;
-
-            if (!Input.GetKey(slideKey))
+            if (!TitaniumCrabPlugin.Instance.SlideJumpEnabled)
                 return;
 
             PlayerMovement pm = GetLocalPlayerMovement();
@@ -1075,14 +1296,8 @@ namespace TitaniumCrab
         /// - Pitch: if looking up (positive pitch), uses top of hitbox as pivot
         ///   so you don't teleport above the ceiling and fall back
         /// </summary>
-        private void RunClickTp()
+        private void DoClickTp()
         {
-            var p = TitaniumCrabPlugin.Instance;
-            KeyCode tpKey = (KeyCode)p.ClickTpKey;
-
-            if (!Input.GetKeyDown(tpKey))
-                return;
-
             PlayerMovement pm = GetLocalPlayerMovement();
             if (pm == null)
                 return;
@@ -1203,43 +1418,31 @@ namespace TitaniumCrab
         }
 
         /// <summary>
-        /// Save/Restore Position: F5 saves, F6 teleports back.
+        /// Save current position for later restoration.
         /// </summary>
-        private void RunSaveRestorePos()
+        private void DoSavePos()
         {
-            var p = TitaniumCrabPlugin.Instance;
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null) return;
+            Rigidbody rb = pm.GetRb();
+            if (rb == null) return;
+            _savedPosition = rb.position;
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"Position saved: {_savedPosition}");
+        }
 
-            if (Input.GetKeyDown((KeyCode)p.SavePosKey))
-            {
-                PlayerMovement pm = GetLocalPlayerMovement();
-                if (pm != null)
-                {
-                    Rigidbody rb = pm.GetRb();
-                    if (rb != null)
-                    {
-                        _savedPosition = rb.position;
-                        TitaniumCrabPlugin.Instance.Log.LogInfo($"Position saved: {_savedPosition}");
-                    }
-                }
-            }
-
-            if (Input.GetKeyDown((KeyCode)p.RestorePosKey))
-            {
-                if (_savedPosition.HasValue)
-                {
-                    PlayerMovement pm = GetLocalPlayerMovement();
-                    if (pm != null)
-                    {
-                        Rigidbody rb = pm.GetRb();
-                        if (rb != null)
-                        {
-                            rb.position = _savedPosition.Value;
-                            rb.velocity = Vector3.zero;
-                            TitaniumCrabPlugin.Instance.Log.LogInfo($"Position restored: {_savedPosition}");
-                        }
-                    }
-                }
-            }
+        /// <summary>
+        /// Teleport to previously saved position.
+        /// </summary>
+        private void DoRestorePos()
+        {
+            if (!_savedPosition.HasValue) return;
+            PlayerMovement pm = GetLocalPlayerMovement();
+            if (pm == null) return;
+            Rigidbody rb = pm.GetRb();
+            if (rb == null) return;
+            rb.position = _savedPosition.Value;
+            rb.velocity = Vector3.zero;
+            TitaniumCrabPlugin.Instance.Log.LogInfo($"Position restored: {_savedPosition}");
         }
 
         /// <summary>
